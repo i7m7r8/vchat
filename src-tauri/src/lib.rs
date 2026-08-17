@@ -1,3 +1,4 @@
+pub mod base32;
 pub mod commands;
 pub mod crypto;
 pub mod messaging;

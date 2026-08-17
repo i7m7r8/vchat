@@ -15,11 +15,8 @@ pub async fn generate_identity(display_name: &str) -> Result<Identity> {
     let onion_hash = Sha256::digest(static_public.as_bytes());
     let onion_address = format!(
         "{}.onion",
-        base32::encode(
-            base32::Alphabet::RFC4648 { padding: false },
-            &onion_hash[..]
-        )
-        .to_lowercase()
+        crate::base32::encode_base32(&onion_hash[..])
+            .to_lowercase()
     );
 
     let identity = Identity {

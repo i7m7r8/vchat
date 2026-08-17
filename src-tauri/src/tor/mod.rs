@@ -32,10 +32,7 @@ fn generate_onion_address() -> String {
     use sha2::{Digest, Sha256};
     let random_bytes: [u8; 32] = rand::random();
     let hash = Sha256::digest(&random_bytes);
-    let encoded = base32::encode(
-        base32::Alphabet::RFC4648 { padding: false },
-        &hash[..],
-    );
+    let encoded = crate::base32::encode_base32(&hash[..]);
     format!("{}.onion", encoded.to_lowercase())
 }
 

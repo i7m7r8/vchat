@@ -47,8 +47,7 @@ anyhow = "1"
 # UUID for peer identification
 uuid = { version = "1", features = ["v4"] }
 
-# Base32 for onion addresses
-base32 = "0.2"
+# base32 - we encode manually to avoid broken crate
 
 # Chrono for timestamps
 chrono = "0.4"
