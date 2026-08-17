@@ -1,0 +1,69 @@
+[package]
+name = "vchat"
+version = "0.1.0"
+edition = "2021"
+description = "Ultra-secure P2P Tor-based messaging, video calling, and screen sharing"
+authors = ["Vchat Contributors"]
+license = "MIT"
+repository = "https://github.com/i7m7r8/vchat"
+
+[lib]
+name = "vchat_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Tor
+arti-client = { version = "0.22", features = ["static", "onion-service"] }
+tor-rtcompat = { version = "0.22", features = ["static"] }
+tor-config = { version = "0.22" }
+tor-dirmgr = { version = "0.22", features = ["static"] }
+
+# Cryptography
+snow = { version = "0.10", features = ["default"] }
+aes-gcm = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+rand = "0.8"
+sha2 = "0.10"
+hkdf = "0.12"
+
+# WebRTC (sans-I/O)
+str0m = "0.22"
+
+# Audio/Video
+opus = "0.3"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# UUID for peer identification
+uuid = { version = "1", features = ["v4"] }
+
+# Base32 for onion addresses
+base32 = "0.2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21", features = ["invocable"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

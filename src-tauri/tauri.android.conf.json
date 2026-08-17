@@ -1,0 +1,20 @@
+{
+  "buildTargets": [
+    {
+      "target": "aarch64",
+      "template": "aarch64"
+    },
+    {
+      "target": "armv7",
+      "template": "armv7"
+    },
+    {
+      "target": "x86",
+      "template": "x86"
+    },
+    {
+      "target": "x86_64",
+      "template": "x86_64"
+    }
+  ]
+}
