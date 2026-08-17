@@ -20,8 +20,8 @@ impl NoiseSession {
 
     pub fn initiator(static_secret: StaticSecret) -> Result<Self> {
         let key_bytes = static_secret.to_bytes();
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?
-            .local_private_key(&key_bytes);
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
+            .local_private_key(&key_bytes)?;
         Ok(Self {
             handshake: Some(builder.build_initiator()?),
             transport: None,
@@ -30,8 +30,8 @@ impl NoiseSession {
 
     pub fn responder(static_secret: StaticSecret) -> Result<Self> {
         let key_bytes = static_secret.to_bytes();
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?
-            .local_private_key(&key_bytes);
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
+            .local_private_key(&key_bytes)?;
         Ok(Self {
             handshake: Some(builder.build_responder()?),
             transport: None,
