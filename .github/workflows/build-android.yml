@@ -64,22 +64,23 @@ jobs:
       - name: Initialize Tauri Android
         run: cargo tauri android init
 
-      - name: Build Android APK
-        run: cargo tauri android build --verbose 2>&1 | tail -100
+      - name: Build Rust library for Android
+        run: cargo tauri android build --target aarch64-linux-android
+
+      - name: Build APK with Gradle
+        working-directory: src-tauri/gen/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Find APK
         id: find-apk
         run: |
-          echo "=== Looking for APK ==="
-          find / -name "*.apk" -type f 2>/dev/null | head -10
-          APK_PATH=$(find / -name "*.apk" -path "*/vchat*" -type f 2>/dev/null | head -1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
-          fi
+          APK_PATH=$(find src-tauri/gen/android -name "*.apk" -type f 2>/dev/null | head -1)
           if [ -z "$APK_PATH" ]; then
             echo "No APK found!"
-            ls -la src-tauri/gen/android/app/build/outputs/ 2>/dev/null || true
-            find src-tauri/gen/android -type f -name "*.apk" -o -name "*.aab" -o -name "*.ap_" 2>/dev/null
+            find src-tauri/gen/android -type f -name "*.apk" 2>/dev/null
+            ls -la src-tauri/gen/android/app/build/outputs/apk/ 2>/dev/null || true
             exit 1
           fi
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
