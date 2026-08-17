@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 static WEBRTC_STATE: once_cell::sync::Lazy<Arc<RwLock<WebRTCState>>> =
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(WebRTCState::default())));

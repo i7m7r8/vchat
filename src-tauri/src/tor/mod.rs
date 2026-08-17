@@ -1,8 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 static TOR_STATE: once_cell::sync::Lazy<Arc<RwLock<TorState>>> =
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(TorState::default())));
