@@ -11,8 +11,7 @@ pub struct NoiseSession {
 
 impl NoiseSession {
     pub fn new() -> Result<Self> {
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?);
-
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?;
         Ok(Self {
             handshake: Some(builder.build_responder()?),
             transport: None,
@@ -20,9 +19,9 @@ impl NoiseSession {
     }
 
     pub fn initiator(static_secret: StaticSecret) -> Result<Self> {
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&static_secret.to_bytes())?;
-
+        let key_bytes = static_secret.to_bytes();
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?
+            .local_private_key(&key_bytes);
         Ok(Self {
             handshake: Some(builder.build_initiator()?),
             transport: None,
@@ -30,9 +29,9 @@ impl NoiseSession {
     }
 
     pub fn responder(static_secret: StaticSecret) -> Result<Self> {
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&static_secret.to_bytes())?;
-
+        let key_bytes = static_secret.to_bytes();
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?
+            .local_private_key(&key_bytes);
         Ok(Self {
             handshake: Some(builder.build_responder()?),
             transport: None,
@@ -52,11 +51,9 @@ impl NoiseSession {
         if let Some(ref mut hs) = self.handshake {
             let len = hs.write_message(payload, &mut buf)?;
             buf.truncate(len);
-
             if hs.is_handshake_finished() {
                 self.finish_handshake()?;
             }
-
             return Ok(buf);
         }
 
@@ -75,11 +72,9 @@ impl NoiseSession {
         if let Some(ref mut hs) = self.handshake {
             let len = hs.read_message(data, &mut buf)?;
             buf.truncate(len);
-
             if hs.is_handshake_finished() {
                 self.finish_handshake()?;
             }
-
             return Ok(buf);
         }
 
