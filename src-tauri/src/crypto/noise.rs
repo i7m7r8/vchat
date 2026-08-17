@@ -1,63 +1,96 @@
 use anyhow::Result;
-use snow::{Builder, TransportState};
+use snow::TransportState;
 use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
 
 const NOISE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
 
 pub struct NoiseSession {
-    transport: TransportState,
+    handshake: Option<snow::HandshakeState>,
+    transport: Option<TransportState>,
 }
 
 impl NoiseSession {
     pub fn new() -> Result<Self> {
-        let builder = Builder::new(NOISE_PATTERN.parse()?);
-        let keypair = builder.generate_keypair()?;
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?);
 
         Ok(Self {
-            transport: builder
-                .local_private_key(&keypair.private)
-                .build_responder()?,
+            handshake: Some(builder.build_responder()?),
+            transport: None,
         })
     }
 
     pub fn initiator(static_secret: StaticSecret) -> Result<Self> {
-        let builder = Builder::new(NOISE_PATTERN.parse()?)
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
             .local_private_key(&static_secret.to_bytes());
 
         Ok(Self {
-            transport: builder.build_initiator()?,
+            handshake: Some(builder.build_initiator()?),
+            transport: None,
         })
     }
 
     pub fn responder(static_secret: StaticSecret) -> Result<Self> {
-        let builder = Builder::new(NOISE_PATTERN.parse()?)
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
             .local_private_key(&static_secret.to_bytes());
 
         Ok(Self {
-            transport: builder.build_responder()?,
+            handshake: Some(builder.build_responder()?),
+            transport: None,
         })
     }
 
     pub fn write_message(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
         let mut buf = vec![0u8; 65535];
-        let len = self.transport.write_message(payload, &mut buf)?;
-        buf.truncate(len);
-        Ok(buf)
+
+        if let Some(ref mut hs) = self.handshake {
+            let len = hs.write_message(payload, &mut buf)?;
+            buf.truncate(len);
+
+            if hs.is_handshake_finished() {
+                let state = hs.clone().into_transport_mode()?;
+                self.transport = Some(state);
+                self.handshake = None;
+            }
+
+            return Ok(buf);
+        }
+
+        if let Some(ref mut transport) = self.transport {
+            let len = transport.write_message(payload, &mut buf)?;
+            buf.truncate(len);
+            return Ok(buf);
+        }
+
+        anyhow::bail!("No active session")
     }
 
     pub fn read_message(&mut self, data: &[u8]) -> Result<Vec<u8>> {
         let mut buf = vec![0u8; 65535];
-        let len = self.transport.read_message(data, &mut buf)?;
-        buf.truncate(len);
-        Ok(buf)
+
+        if let Some(ref mut hs) = self.handshake {
+            let len = hs.read_message(data, &mut buf)?;
+            buf.truncate(len);
+
+            if hs.is_handshake_finished() {
+                let state = hs.clone().into_transport_mode()?;
+                self.transport = Some(state);
+                self.handshake = None;
+            }
+
+            return Ok(buf);
+        }
+
+        if let Some(ref mut transport) = self.transport {
+            let len = transport.read_message(data, &mut buf)?;
+            buf.truncate(len);
+            return Ok(buf);
+        }
+
+        anyhow::bail!("No active session")
     }
 
     pub fn is_handshake_complete(&self) -> bool {
-        self.transport.is_handshake_finished()
-    }
-
-    pub fn into_transport(self) -> Result<TransportState> {
-        Ok(self.transport)
+        self.handshake.is_none() && self.transport.is_some()
     }
 }
 

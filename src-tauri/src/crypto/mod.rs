@@ -3,7 +3,6 @@ pub mod noise;
 pub mod store;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::commands::{Contact, Identity};
@@ -77,10 +76,13 @@ pub fn encrypt_message(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
         Aes256Gcm, Nonce,
     };
 
-    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| anyhow::anyhow!("Failed to create cipher: {}", e))?;
     let nonce = Nonce::from_slice(&rand::random::<[u8; 12]>());
 
-    let ciphertext = cipher.encrypt(nonce, plaintext)?;
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
 
     let mut result = nonce.to_vec();
     result.extend_from_slice(&ciphertext);
@@ -98,10 +100,13 @@ pub fn decrypt_message(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
         anyhow::bail!("Ciphertext too short");
     }
 
-    let cipher = Aes256Gcm::new_from_slice(key)?;
+    let cipher = Aes256Gcm::new_from_slice(key)
+        .map_err(|e| anyhow::anyhow!("Failed to create cipher: {}", e))?;
     let nonce = Nonce::from_slice(&ciphertext[..12]);
 
-    let plaintext = cipher.decrypt(nonce, &ciphertext[12..])?;
+    let plaintext = cipher
+        .decrypt(nonce, &ciphertext[12..])
+        .map_err(|e| anyhow::anyhow!("Decryption failed: {}", e))?;
 
     Ok(plaintext)
 }
