@@ -21,7 +21,7 @@ impl NoiseSession {
 
     pub fn initiator(static_secret: StaticSecret) -> Result<Self> {
         let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&static_secret.to_bytes());
+            .local_private_key(&static_secret.to_bytes())?;
 
         Ok(Self {
             handshake: Some(builder.build_initiator()?),
@@ -31,12 +31,19 @@ impl NoiseSession {
 
     pub fn responder(static_secret: StaticSecret) -> Result<Self> {
         let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&static_secret.to_bytes());
+            .local_private_key(&static_secret.to_bytes())?;
 
         Ok(Self {
             handshake: Some(builder.build_responder()?),
             transport: None,
         })
+    }
+
+    fn finish_handshake(&mut self) -> Result<()> {
+        if let Some(hs) = self.handshake.take() {
+            self.transport = Some(hs.into_transport_mode()?);
+        }
+        Ok(())
     }
 
     pub fn write_message(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
@@ -47,9 +54,7 @@ impl NoiseSession {
             buf.truncate(len);
 
             if hs.is_handshake_finished() {
-                let state = hs.clone().into_transport_mode()?;
-                self.transport = Some(state);
-                self.handshake = None;
+                self.finish_handshake()?;
             }
 
             return Ok(buf);
@@ -72,9 +77,7 @@ impl NoiseSession {
             buf.truncate(len);
 
             if hs.is_handshake_finished() {
-                let state = hs.clone().into_transport_mode()?;
-                self.transport = Some(state);
-                self.handshake = None;
+                self.finish_handshake()?;
             }
 
             return Ok(buf);

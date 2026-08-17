@@ -78,13 +78,15 @@ pub fn encrypt_message(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>> {
 
     let cipher = Aes256Gcm::new_from_slice(key)
         .map_err(|e| anyhow::anyhow!("Failed to create cipher: {}", e))?;
-    let nonce = Nonce::from_slice(&rand::random::<[u8; 12]>());
+
+    let nonce_bytes: [u8; 12] = rand::random();
+    let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
         .encrypt(nonce, plaintext)
         .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
 
-    let mut result = nonce.to_vec();
+    let mut result = nonce_bytes.to_vec();
     result.extend_from_slice(&ciphertext);
 
     Ok(result)
