@@ -10,7 +10,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "Vchat",
     "windows": [
       {
         "title": "Vchat",
