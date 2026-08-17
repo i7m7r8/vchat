@@ -11,7 +11,7 @@ pub struct NoiseSession {
 
 impl NoiseSession {
     pub fn new() -> Result<Self> {
-        let builder = snow::Builder::new(NOISE_PATTERN.parse()?)?;
+        let builder = snow::Builder::new(NOISE_PATTERN.parse()?);
         Ok(Self {
             handshake: Some(builder.build_responder()?),
             transport: None,
