@@ -29,7 +29,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
 
       - name: Cache Rust
         uses: actions/cache@v4
@@ -51,9 +51,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
-        run: |
-          sdkmanager --install "ndk;25.2.9519653"
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
+        run: sdkmanager --install "ndk;25.2.9519653"
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
@@ -61,26 +59,16 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Initialize Tauri Android
-        run: cargo tauri android init
-
-      - name: Build Rust library for Android
+      - name: Build Android APK
         run: cargo tauri android build --target aarch64
-
-      - name: Build APK with Gradle
-        working-directory: src-tauri/gen/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
 
       - name: Find APK
         id: find-apk
         run: |
           APK_PATH=$(find src-tauri/gen/android -name "*.apk" -type f 2>/dev/null | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "No APK found!"
-            find src-tauri/gen/android -type f -name "*.apk" 2>/dev/null
-            ls -la src-tauri/gen/android/app/build/outputs/apk/ 2>/dev/null || true
+            echo "Searching broader..."
+            find . -name "*.apk" -type f 2>/dev/null
             exit 1
           fi
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
@@ -105,15 +93,17 @@ jobs:
             
             Auto-built from commit ${{ github.sha }}
             
+            ### Features
+            - P2P messaging over Tor onion services
+            - End-to-end encrypted with Noise Protocol + AES-256-GCM
+            - Video & voice calling
+            - Screen sharing
+            - No central servers
+            
             ### Installation
             1. Download the APK below
             2. Enable "Install from unknown sources" on your Android device
             3. Open the APK to install
-            
-            ### Security
-            - All traffic routed through Tor
-            - End-to-end encrypted with Noise Protocol
-            - No central servers
           files: ${{ steps.find-apk.outputs.apk_path }}
           draft: false
           prerelease: false
