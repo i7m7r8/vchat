@@ -82,7 +82,8 @@ class VchatApp {
     store.setSelectedContact(contact);
 
     document.querySelectorAll(".contact-item").forEach((el) => {
-      el.classList.toggle("active", el.dataset.onion === contact.onion_address);
+      const htmlEl = el as HTMLElement;
+      htmlEl.classList.toggle("active", htmlEl.dataset.onion === contact.onion_address);
     });
 
     const chatName = document.getElementById("chat-name");
@@ -104,13 +105,13 @@ class VchatApp {
     try {
       const messages = await api.getMessages(contactOnion);
       store.setMessages(contactOnion, messages);
-      this.renderMessages(messages, contactOnion);
+      this.renderMessages(messages);
     } catch (error) {
       console.error("Failed to load messages:", error);
     }
   }
 
-  private renderMessages(messages: any[], contactOnion: string) {
+  private renderMessages(messages: any[]) {
     const container = document.getElementById("messages-container");
     if (!container) return;
 
@@ -165,8 +166,7 @@ class VchatApp {
 
       store.addMessage(this.currentContact.onion_address, message);
       this.renderMessages(
-        store.getMessages(this.currentContact.onion_address),
-        this.currentContact.onion_address
+        store.getMessages(this.currentContact.onion_address)
       );
     } catch (error) {
       console.error("Failed to send message:", error);
