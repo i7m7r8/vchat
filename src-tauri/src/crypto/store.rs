@@ -45,14 +45,8 @@ pub async fn init_db() -> Result<()> {
             content TEXT NOT NULL,
             timestamp INTEGER NOT NULL,
             encrypted BOOLEAN DEFAULT TRUE,
-            message_type TEXT NOT NULL,
-            FOREIGN KEY (sender) REFERENCES contacts(onion_address),
-            FOREIGN KEY (recipient) REFERENCES contacts(onion_address)
+            message_type TEXT NOT NULL
         );
-
-        CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
-        CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient);
-        CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
         ",
     )?;
 

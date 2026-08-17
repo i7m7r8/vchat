@@ -6,22 +6,17 @@ const NOISE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_BLAKE2s";
 
 pub struct NoiseSession {
     transport: TransportState,
-    static_secret: StaticSecret,
-    remote_public: Option<PublicKey>,
 }
 
 impl NoiseSession {
     pub fn new() -> Result<Self> {
-        let static_secret = StaticSecret::random_from_rng(rand::thread_rng());
-
         let builder = Builder::new(NOISE_PATTERN.parse()?);
-
         let keypair = builder.generate_keypair()?;
 
         Ok(Self {
-            transport: builder.build_responder()?,
-            static_secret,
-            remote_public: None,
+            transport: builder
+                .local_private_key(&keypair.private)
+                .build_responder()?,
         })
     }
 
@@ -31,8 +26,6 @@ impl NoiseSession {
 
         Ok(Self {
             transport: builder.build_initiator()?,
-            static_secret,
-            remote_public: None,
         })
     }
 
@@ -42,8 +35,6 @@ impl NoiseSession {
 
         Ok(Self {
             transport: builder.build_responder()?,
-            static_secret,
-            remote_public: None,
         })
     }
 
@@ -63,10 +54,6 @@ impl NoiseSession {
 
     pub fn is_handshake_complete(&self) -> bool {
         self.transport.is_handshake_finished()
-    }
-
-    pub fn get_remote_public(&self) -> Option<&PublicKey> {
-        self.remote_public.as_ref()
     }
 
     pub fn into_transport(self) -> Result<TransportState> {

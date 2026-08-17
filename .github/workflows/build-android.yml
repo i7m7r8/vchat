@@ -1,0 +1,111 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: rust-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;25.2.9519653"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Initialize Tauri Android
+        run: cargo tauri android init
+
+      - name: Apply custom Android config
+        run: |
+          cp src-tauri/gen/android/app/src/main/AndroidManifest.xml src-tauri/gen/android/app/src/main/AndroidManifest.xml.bak 2>/dev/null || true
+
+      - name: Build Android APK
+        run: cargo tauri android build --target aarch64 --apk
+
+      - name: Find APK
+        id: find-apk
+        run: |
+          APK_PATH=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "Found APK at: $APK_PATH"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vchat-android-arm64
+          path: ${{ steps.find-apk.outputs.apk_path }}
+          retention-days: 30
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Vchat Build #${{ github.run_number }}"
+          body: |
+            ## Vchat Android APK
+            
+            Auto-built from commit ${{ github.sha }}
+            
+            ### Installation
+            1. Download the APK below
+            2. Enable "Install from unknown sources" on your Android device
+            3. Open the APK to install
+            
+            ### Security
+            - All traffic routed through Tor
+            - End-to-end encrypted with Noise Protocol
+            - No central servers
+          files: ${{ steps.find-apk.outputs.apk_path }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

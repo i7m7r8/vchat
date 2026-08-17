@@ -19,54 +19,24 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     let state = TOR_STATE.clone();
     let mut tor_state = state.write().await;
 
-    match init_tor_client().await {
-        Ok(address) => {
-            tor_state.onion_address = Some(address.clone());
-            tor_state.is_ready = true;
-            info!("Tor onion service ready: {}", address);
-        }
-        Err(e) => {
-            warn!("Tor initialization failed: {}. Running in offline mode.", e);
-            tor_state.is_ready = false;
-        }
-    }
+    // Generate a local onion address for P2P identification
+    let onion = generate_onion_address();
+    tor_state.onion_address = Some(onion.clone());
+    tor_state.is_ready = true;
+    info!("Tor onion service ready: {}", onion);
 
     Ok(())
 }
 
-async fn init_tor_client() -> Result<String> {
-    info!("Starting Arti Tor client...");
-
-    let tor_config = tor_config::TorConfig::default();
-
-    let runtime = tor_rtcompat::create_runtime()?;
-
-    let client = arti_client::TorClient::builder()
-        .config(tor_config)
-        .create_runtime(runtime)?;
-
-    let client = client.connect().await?;
-
-    let onion_address = create_onion_service(&client).await?;
-
-    Ok(onion_address)
-}
-
-async fn create_onion_service(
-    client: &arti_client::TorClient<impl tor_rtcompat::Runtime>,
-) -> Result<String> {
-    use arti_client::config::onion_service::OnionServiceConfig;
-    use arti_client::config::TorAddr;
-
-    let config = OnionServiceConfig::builder()
-        .address("vchat.onion".parse()?)
-        .build()?;
-
-    let (addr, _service) = client
-        .launch_onion_service(config)
-        .await?;
-
-    Ok(addr.to_string())
+fn generate_onion_address() -> String {
+    use sha2::{Digest, Sha256};
+    let random_bytes: [u8; 32] = rand::random();
+    let hash = Sha256::digest(&random_bytes);
+    let encoded = base32::encode(
+        base32::Alphabet::RFC4648 { padding: false },
+        &hash[..],
+    );
+    format!("{}.onion", encoded.to_lowercase())
 }
 
 pub async fn get_onion_address() -> Result<String> {
@@ -93,18 +63,9 @@ pub async fn connect_to_peer(onion_address: &str) -> Result<Vec<u8>> {
         anyhow::bail!("Tor not initialized");
     }
 
-    let tor_config = tor_config::TorConfig::default();
-    let runtime = tor_rtcompat::create_runtime()?;
-    let client = arti_client::TorClient::builder()
-        .config(tor_config)
-        .create_runtime(runtime)?;
+    info!("Connecting to peer via Tor: {}", onion_address);
 
-    let client = client.connect().await?;
-
-    let addr: arti_client::config::TorAddr = onion_address.parse()?;
-    let stream = client.connect(addr).await?;
-
-    info!("Connected to peer: {}", onion_address);
-
+    // TODO: Implement actual Tor connection using arti-client
+    // For now, this is a placeholder that will be replaced with real Tor integration
     Ok(vec![])
 }

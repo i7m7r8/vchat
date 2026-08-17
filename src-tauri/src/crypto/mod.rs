@@ -3,29 +3,27 @@ pub mod noise;
 pub mod store;
 
 use anyhow::Result;
-use base32;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use x25519_dalek::{EphemeralSecret, PublicKey, StaticSecret};
 
 use crate::commands::{Contact, Identity};
 
 pub async fn generate_identity(display_name: &str) -> Result<Identity> {
-    let secret = EphemeralSecret::random_from_rng(rand::thread_rng());
-    let public = PublicKey::from(&secret);
-
-    let static_secret = StaticSecret::random_from_rng(rand::thread_rng());
-    let static_public = PublicKey::from(&static_secret);
+    let static_secret = x25519_dalek::StaticSecret::random_from_rng(rand::thread_rng());
+    let static_public = x25519_dalek::PublicKey::from(&static_secret);
 
     let onion_hash = Sha256::digest(static_public.as_bytes());
     let onion_address = format!(
         "{}.onion",
-        base32::encode(base32::Alphabet::RFC4648 { padding: false }, &onion_hash[..])
-            .to_lowercase()
+        base32::encode(
+            base32::Alphabet::RFC4648 { padding: false },
+            &onion_hash[..]
+        )
+        .to_lowercase()
     );
 
     let identity = Identity {
-        public_key: hex::encode(public.as_bytes()),
+        public_key: hex::encode(static_public.as_bytes()),
         onion_address,
         display_name: display_name.to_string(),
     };
@@ -112,8 +110,8 @@ pub fn decrypt_message(key: &[u8; 32], ciphertext: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn derive_shared_key(
-    our_secret: &StaticSecret,
-    their_public: &PublicKey,
+    our_secret: &x25519_dalek::StaticSecret,
+    their_public: &x25519_dalek::PublicKey,
 ) -> [u8; 32] {
     let shared_secret = our_secret.diffie_hellman(their_public);
     shared_secret.as_bytes().clone()

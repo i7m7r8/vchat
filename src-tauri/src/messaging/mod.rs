@@ -2,8 +2,6 @@ use anyhow::Result;
 use crate::commands::{Contact, Message, MessageType};
 use crate::crypto;
 use crate::crypto::store;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::info;
 
 pub async fn send_message(
@@ -27,6 +25,7 @@ pub async fn send_message(
 
     store::save_message(&message).await?;
 
+    // Derive shared key and encrypt
     let contacts = store::load_contacts().await?;
     let contact = contacts.iter().find(|c| c.onion_address == recipient_onion);
 
@@ -35,12 +34,11 @@ pub async fn send_message(
             .try_into()
             .map_err(|_| anyhow::anyhow!("Invalid public key length"))?;
 
-        let shared_key = crypto::derive_shared_key(
-            &x25519_dalek::StaticSecret::random_from_rng(rand::thread_rng()),
-            &x25519_dalek::PublicKey::from(public_key_bytes),
-        );
+        let their_public = x25519_dalek::PublicKey::from(public_key_bytes);
+        let our_secret = x25519_dalek::StaticSecret::random_from_rng(rand::thread_rng());
+        let shared_key = crypto::derive_shared_key(&our_secret, &their_public);
 
-        let encrypted_content = crypto::encrypt_message(&shared_key, content.as_bytes())?;
+        let _encrypted_content = crypto::encrypt_message(&shared_key, content.as_bytes())?;
         info!("Encrypted message for {}", recipient_onion);
     }
 

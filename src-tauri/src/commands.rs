@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 use crate::crypto;
 use crate::tor;
 use crate::messaging;
