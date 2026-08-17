@@ -65,7 +65,7 @@ jobs:
         run: cargo tauri android init
 
       - name: Build Rust library for Android
-        run: cargo tauri android build --target aarch64-linux-android
+        run: cargo tauri android build --target aarch64
 
       - name: Build APK with Gradle
         working-directory: src-tauri/gen/android
