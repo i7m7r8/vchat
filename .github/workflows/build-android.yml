@@ -65,7 +65,7 @@ jobs:
         run: cargo tauri android init
 
       - name: Build Android APK
-        run: cargo tauri android build
+        run: cargo tauri android build --verbose 2>&1 | tail -100
 
       - name: Find APK
         id: find-apk

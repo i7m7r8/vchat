@@ -17,7 +17,6 @@ pub fn run() {
     tracing::info!("Starting Vchat...");
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::init_identity,
             commands::get_identity,
