@@ -70,11 +70,16 @@ jobs:
       - name: Find APK
         id: find-apk
         run: |
-          APK_PATH=$(find src-tauri/gen/android -name "*.apk" -type f | head -1)
+          echo "=== Looking for APK ==="
+          find / -name "*.apk" -type f 2>/dev/null | head -10
+          APK_PATH=$(find / -name "*.apk" -path "*/vchat*" -type f 2>/dev/null | head -1)
           if [ -z "$APK_PATH" ]; then
-            echo "No APK found, checking build output..."
-            find src-tauri/gen/android -name "*.apk" -o -name "*.aab" 2>/dev/null
+            APK_PATH=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
+          fi
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found!"
             ls -la src-tauri/gen/android/app/build/outputs/ 2>/dev/null || true
+            find src-tauri/gen/android -type f -name "*.apk" -o -name "*.aab" -o -name "*.ap_" 2>/dev/null
             exit 1
           fi
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
