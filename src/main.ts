@@ -6,7 +6,7 @@ class VchatApp {
   private activeCallId: string | null = null;
   private callTimerInterval: any = null;
   private callSeconds = 0;
-  private currentScreen = "chats";
+  private _currentScreen = "chats";
 
   async init() {
     await this.loadIdentity();
@@ -68,7 +68,7 @@ class VchatApp {
   }
 
   private showScreen(name: string) {
-    this.currentScreen = name;
+    this._currentScreen = name;
     const screens = ["chats", "chat", "contacts", "calls", "settings"];
     screens.forEach((s) => {
       const el = document.getElementById(`screen-${s}`);
@@ -366,7 +366,7 @@ class VchatApp {
     });
   }
 
-  private async startCall(video: boolean) {
+  private async startCall(_video: boolean) {
     if (!this.currentContact) return;
 
     try {
