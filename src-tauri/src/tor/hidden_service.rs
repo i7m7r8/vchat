@@ -1,10 +1,10 @@
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha512};
 use std::net::TcpListener as StdTcpListener;
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
 pub fn generate_v3_onion_address() -> String {
-    let secret = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
+    let secret = ed25519_dalek::SigningKey::from_bytes(&rand::random::<[u8; 32]>());
     let verifying = secret.verifying_key();
     pubkey_to_v3_onion(&verifying.to_bytes())
 }

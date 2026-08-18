@@ -8,7 +8,7 @@ use aes_gcm::{
 };
 use anyhow::Result;
 use hkdf::Hkdf;
-use sha2::{Digest, Sha256};
+use sha2::Sha256;
 use zeroize::Zeroize;
 
 use crate::commands::{Contact, Identity};
@@ -158,38 +158,19 @@ pub async fn generate_qr_code() -> Result<String> {
     }))?;
 
     use qrcode::QrCode;
+    use qrcode::render::svg;
 
     let code = QrCode::new(qr_payload.as_bytes())
         .map_err(|e| anyhow::anyhow!("QR generation failed: {e}"))?;
 
-    let module_count = code.module_count();
-    let ms = 10;
-    let total = module_count * ms;
-    let padding = ms * 2;
-    let view_total = total + padding * 2;
-
-    let mut svg = format!(
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {view_total} {view_total}' width='{view_total}' height='{view_total}'>"
-    );
-    svg.push_str("<rect width='100%' height='100%' fill='white'/>");
-
-    for y in 0..module_count {
-        for x in 0..module_count {
-            if code.get_module(x, y) {
-                svg.push_str(&format!(
-                    "<rect x='{}' y='{}' width='{ms}' height='{ms}' fill='black'/>",
-                    x * ms + padding,
-                    y * ms + padding,
-                ));
-            }
-        }
-    }
-
-    svg.push_str("</svg>");
+    let svg_string = code
+        .render::<svg::Color>()
+        .min_dimensions(200, 200)
+        .build();
 
     let b64 = base64::Engine::encode(
         &base64::engine::general_purpose::STANDARD,
-        svg.as_bytes(),
+        svg_string.as_bytes(),
     );
 
     Ok(format!("data:image/svg+xml;base64,{b64}"))

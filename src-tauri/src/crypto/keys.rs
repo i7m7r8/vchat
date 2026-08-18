@@ -1,17 +1,21 @@
 use anyhow::Result;
-use ed25519_dalek::{SigningKey, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use zeroize::Zeroize;
 
-#[derive(Zeroize)]
 pub struct Ed25519KeyPair {
     signing_key_bytes: [u8; 32],
     pub verifying_key: VerifyingKey,
 }
 
+impl Drop for Ed25519KeyPair {
+    fn drop(&mut self) {
+        self.signing_key_bytes.zeroize();
+    }
+}
+
 impl Ed25519KeyPair {
     pub fn generate() -> Result<Self> {
-        let mut csprng = rand::thread_rng();
-        let signing_key = SigningKey::generate(&mut csprng);
+        let signing_key = SigningKey::from_bytes(&rand::random::<[u8; 32]>());
         let verifying_key = signing_key.verifying_key();
 
         Ok(Self {

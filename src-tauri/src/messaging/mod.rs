@@ -78,7 +78,7 @@ pub async fn send_message(
 
     match crate::tor::connect_to_peer(recipient_onion, 4433).await {
         Ok(mut stream) => {
-            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            use tokio::io::AsyncWriteExt;
             match stream.write_all(&_wire_bytes).await {
                 Ok(()) => {
                     info!("Message sent to {recipient_onion}");

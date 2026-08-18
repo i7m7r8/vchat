@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 static TOR_STATE: once_cell::sync::Lazy<Arc<RwLock<TorState>>> =
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(TorState::default())));
@@ -78,7 +78,6 @@ pub async fn connect_to_peer(onion_address: &str, port: u16) -> Result<tokio::ne
 }
 
 async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let socks_ports = [9050, 9150];
     let mut last_err = None;

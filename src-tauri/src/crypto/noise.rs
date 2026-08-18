@@ -14,7 +14,7 @@ impl NoiseSession {
     pub fn new_initiator(static_secret: &StaticSecret) -> Result<Self> {
         let key_bytes = static_secret.to_bytes();
         let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&key_bytes);
+            .local_private_key(&key_bytes)?;
 
         Ok(Self {
             handshake: Some(builder.build_initiator()?),
@@ -26,7 +26,7 @@ impl NoiseSession {
     pub fn new_responder(static_secret: &StaticSecret) -> Result<Self> {
         let key_bytes = static_secret.to_bytes();
         let builder = snow::Builder::new(NOISE_PATTERN.parse()?)
-            .local_private_key(&key_bytes);
+            .local_private_key(&key_bytes)?;
 
         Ok(Self {
             handshake: Some(builder.build_responder()?),
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_noise_handshake() {
-        let (initiator_secret, initiator_public) = generate_static_keypair().unwrap();
+        let (initiator_secret, _initiator_public) = generate_static_keypair().unwrap();
         let (responder_secret, _responder_public) = generate_static_keypair().unwrap();
 
         let mut initiator = NoiseSession::new_initiator(&initiator_secret).unwrap();
