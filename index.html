@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#121212" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Vchat</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Status Bar Space -->
+    <div class="status-bar-spacer"></div>
+
+    <!-- ===== SCREEN: CHATS LIST ===== -->
+    <div class="screen" id="screen-chats">
+      <header class="app-bar">
+        <div class="app-bar-left">
+          <div class="app-logo-small"></div>
+          <h1 class="app-bar-title">Vchat</h1>
+        </div>
+        <div class="app-bar-actions">
+          <button class="icon-btn" id="btn-search-chats" aria-label="Search">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="search-bar" id="search-chats-bar" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-chats-input" placeholder="Search conversations..." />
+      </div>
+      <div class="chat-list" id="chat-list">
+        <div class="empty-screen">
+          <div class="empty-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>No conversations yet</h3>
+          <p>Start chatting by adding a contact</p>
+        </div>
+      </div>
+      <button class="fab" id="fab-new-chat" aria-label="New chat">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+      </button>
+    </div>
+
+    <!-- ===== SCREEN: CHAT VIEW ===== -->
+    <div class="screen" id="screen-chat" style="display:none">
+      <header class="app-bar chat-view-header">
+        <button class="icon-btn" id="btn-back-chat" aria-label="Back">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="chat-view-info">
+          <div class="chat-view-avatar" id="chat-view-avatar"></div>
+          <div class="chat-view-text">
+            <div class="chat-view-name" id="chat-view-name"></div>
+            <div class="chat-view-status" id="chat-view-status">Online</div>
+          </div>
+        </div>
+        <div class="chat-view-actions">
+          <button class="icon-btn" id="btn-call" aria-label="Call">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-video" aria-label="Video call">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="messages-area" id="messages-area">
+        <div class="messages-list" id="messages-list"></div>
+      </div>
+      <div class="message-composer">
+        <button class="icon-btn composer-attach" aria-label="Attach">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <div class="composer-input-wrapper">
+          <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
+        </div>
+        <button class="send-btn" id="btn-send" aria-label="Send">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: CONTACTS ===== -->
+    <div class="screen" id="screen-contacts" style="display:none">
+      <header class="app-bar">
+        <div class="app-bar-left">
+          <h1 class="app-bar-title">Contacts</h1>
+        </div>
+        <div class="app-bar-actions">
+          <button class="icon-btn" id="btn-search-contacts" aria-label="Search">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="search-bar" id="search-contacts-bar" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-contacts-input" placeholder="Search contacts..." />
+      </div>
+      <div class="contacts-list" id="contacts-list">
+        <div class="empty-screen">
+          <div class="empty-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>No contacts yet</h3>
+          <p>Add contacts to start chatting</p>
+        </div>
+      </div>
+      <button class="fab" id="fab-add-contact" aria-label="Add contact">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+      </button>
+    </div>
+
+    <!-- ===== SCREEN: CALLS ===== -->
+    <div class="screen" id="screen-calls" style="display:none">
+      <header class="app-bar">
+        <div class="app-bar-left">
+          <h1 class="app-bar-title">Calls</h1>
+        </div>
+      </header>
+      <div class="calls-list" id="calls-list">
+        <div class="empty-screen">
+          <div class="empty-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <h3>No calls yet</h3>
+          <p>Start a call from any chat</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: SETTINGS ===== -->
+    <div class="screen" id="screen-settings" style="display:none">
+      <header class="app-bar">
+        <div class="app-bar-left">
+          <h1 class="app-bar-title">Settings</h1>
+        </div>
+      </header>
+      <div class="settings-content">
+        <div class="settings-profile">
+          <div class="settings-avatar" id="settings-avatar"></div>
+          <div class="settings-name" id="settings-name">Loading...</div>
+          <div class="settings-onion" id="settings-onion"></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Account</div>
+          <div class="settings-item" id="btn-show-qr">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>Show QR Code</span>
+            <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+          <div class="settings-item" id="btn-edit-name">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <span>Edit Display Name</span>
+            <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Security</div>
+          <div class="settings-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>End-to-End Encryption</span>
+            <span class="settings-badge">AES-256-GCM</span>
+          </div>
+          <div class="settings-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Tor Hidden Service</span>
+            <span class="settings-badge" id="tor-status">Connecting...</span>
+          </div>
+          <div class="settings-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Noise Protocol</span>
+            <span class="settings-badge">XX_25519</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Danger Zone</div>
+          <div class="settings-item" id="btn-delete-data" style="color:var(--error)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Delete All Data</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">About</div>
+          <div class="settings-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Version</span>
+            <span class="settings-value">0.1.0</span>
+          </div>
+          <div class="settings-item">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+            <span>Source Code</span>
+            <span class="settings-value">GitHub</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BOTTOM NAVIGATION ===== -->
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-item active" data-screen="chats">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>Chats</span>
+      </button>
+      <button class="nav-item" data-screen="contacts">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Contacts</span>
+      </button>
+      <button class="nav-item" data-screen="calls">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span>Calls</span>
+      </button>
+      <button class="nav-item" data-screen="settings">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <!-- ===== SCREEN: VIDEO CALL (overlay) ===== -->
+    <div class="call-overlay" id="call-overlay" style="display:none">
+      <div class="call-bg"></div>
+      <div class="call-content">
+        <div class="call-avatar" id="call-avatar"></div>
+        <div class="call-name" id="call-name">Unknown</div>
+        <div class="call-status" id="call-status">Calling...</div>
+        <div class="call-timer" id="call-timer" style="display:none">00:00</div>
+      </div>
+      <div class="call-controls">
+        <button class="call-control-btn" id="btn-mute">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>Mute</span>
+        </button>
+        <button class="call-control-btn" id="btn-speaker">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          <span>Speaker</span>
+        </button>
+        <button class="call-control-btn call-end-btn" id="btn-end-call">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+          <span>End</span>
+        </button>
+        <button class="call-control-btn" id="btn-video-toggle">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <span>Video</span>
+        </button>
+        <button class="call-control-btn" id="btn-screen-toggle">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Screen</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== MODAL: ADD CONTACT ===== -->
+    <div class="modal-overlay" id="modal-add-contact" style="display:none">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <h2>Add Contact</h2>
+          <button class="icon-btn" id="btn-close-add-contact">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>Display Name</label>
+            <input type="text" id="input-contact-name" placeholder="Alice" />
+          </div>
+          <div class="input-group">
+            <label>Onion Address</label>
+            <input type="text" id="input-contact-onion" placeholder="abc123.onion" class="mono" />
+          </div>
+          <div class="input-group">
+            <label>Public Key</label>
+            <input type="text" id="input-contact-key" placeholder="Hex public key" class="mono" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-flat" id="btn-cancel-add-contact">Cancel</button>
+          <button class="btn-filled" id="btn-save-add-contact">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODAL: QR CODE ===== -->
+    <div class="modal-overlay" id="modal-qr" style="display:none">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <h2>QR Code</h2>
+          <button class="icon-btn" id="btn-close-qr">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body qr-body">
+          <div class="qr-display" id="qr-display"></div>
+          <p class="qr-hint">Share this to let others add you as a contact</p>
+
+          <div class="qr-divider"><span>or scan a contact's QR</span></div>
+
+          <div class="qr-scanner-actions">
+            <button class="btn-filled" id="btn-scan-qr" style="width:100%">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;vertical-align:middle"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Open Camera
+            </button>
+            <button class="btn-flat" id="btn-scan-qr-file" style="width:100%;margin-top:8px">
+              Upload QR Image
+            </button>
+          </div>
+
+          <div id="qr-scanner-area" style="display:none;margin-top:12px">
+            <video id="qr-scanner-video" autoplay playsinline style="width:100%;max-width:300px;border-radius:12px;background:#000"></video>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODAL: EDIT NAME ===== -->
+    <div class="modal-overlay" id="modal-edit-name" style="display:none">
+      <div class="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <h2>Edit Name</h2>
+          <button class="icon-btn" id="btn-close-edit-name">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>Display Name</label>
+            <input type="text" id="input-new-name" placeholder="Your name" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-flat" id="btn-cancel-edit-name">Cancel</button>
+          <button class="btn-filled" id="btn-save-edit-name">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TOAST ===== -->
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
