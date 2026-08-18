@@ -84,28 +84,11 @@ jobs:
 
       - name: Create Release
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: build-${{ github.run_number }}
-          name: "Vchat Build #${{ github.run_number }}"
-          body: |
-            ## Vchat Android APK
-            
-            Auto-built from commit ${{ github.sha }}
-            
-            ### Features
-            - P2P messaging over Tor onion services
-            - End-to-end encrypted with Noise Protocol + AES-256-GCM
-            - Video & voice calling
-            - Screen sharing
-            - No central servers
-            
-            ### Installation
-            1. Download the APK below
-            2. Enable "Install from unknown sources" on your Android device
-            3. Open the APK to install
-          files: ${{ steps.find-apk.outputs.apk_path }}
-          draft: false
-          prerelease: false
+        run: |
+          gh release create "build-${{ github.run_number }}" \
+            "${{ steps.find-apk.outputs.apk_path }}" \
+            --title "Vchat Build #${{ github.run_number }}" \
+            --notes "Auto-built from commit ${{ github.sha }}" \
+            --repo "${{ github.repository }}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
