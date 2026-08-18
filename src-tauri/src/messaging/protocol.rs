@@ -90,7 +90,7 @@ pub fn create_wire_message(
 ) -> Result<WireMessage> {
     use ed25519_dalek::Signer;
 
-    let timestamp = chrono::Utc::now().timestamp_millis() as i64;
+    let timestamp = chrono::Utc::now().timestamp_millis();
 
     let mut sign_data = Vec::new();
     sign_data.push(WIRE_VERSION);

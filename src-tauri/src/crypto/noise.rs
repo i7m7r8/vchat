@@ -92,9 +92,7 @@ impl NoiseSession {
         self.handshake
             .as_ref()
             .and_then(|hs| hs.get_remote_static().map(|k| k.to_vec()))
-            .or_else(|| {
-                self.transport.as_ref().and_then(|_| None)
-            })
+            .or(None)
     }
 
     pub fn is_initiator(&self) -> bool {
