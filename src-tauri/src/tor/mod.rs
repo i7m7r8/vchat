@@ -36,10 +36,7 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
 
     tokio::spawn(hidden_service::accept_loop(listener));
 
-    crate::error::audit_log(
-        "tor_ready",
-        &format!("onion={onion}, port={local_port}"),
-    );
+    crate::error::audit_log("tor_ready", &format!("onion={onion}, port={local_port}"));
 
     Ok(())
 }
@@ -89,22 +86,20 @@ async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {
     for port in &socks_ports {
         let addr = format!("127.0.0.1:{port}");
         match tokio::net::TcpStream::connect(&addr).await {
-            Ok(stream) => {
-                match socks5_connect(stream, target).await {
-                    Ok(s) => return Ok(s),
-                    Err(e) => {
-                        last_err = Some(e);
-                        continue;
-                    }
+            Ok(stream) => match socks5_connect(stream, target).await {
+                Ok(s) => return Ok(s),
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
                 }
-            }
+            },
             Err(_) => continue,
         }
     }
 
-    Err(last_err.unwrap_or_else(|| anyhow::anyhow!(
-        "Cannot reach Tor SOCKS proxy. Ensure Tor is running on port 9050 or 9150"
-    )))
+    Err(last_err.unwrap_or_else(|| {
+        anyhow::anyhow!("Cannot reach Tor SOCKS proxy. Ensure Tor is running on port 9050 or 9150")
+    }))
 }
 
 async fn socks5_connect(

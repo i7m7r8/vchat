@@ -111,10 +111,7 @@ pub fn create_wire_message(
     })
 }
 
-pub fn verify_wire_message(
-    msg: &WireMessage,
-    sender_pubkey: &[u8; 32],
-) -> Result<bool> {
+pub fn verify_wire_message(msg: &WireMessage, sender_pubkey: &[u8; 32]) -> Result<bool> {
     use ed25519_dalek::{Signature, VerifyingKey};
 
     if msg.version != WIRE_VERSION {
@@ -132,7 +129,8 @@ pub fn verify_wire_message(
     sign_data.extend_from_slice(&msg.sequence.to_le_bytes());
     sign_data.extend_from_slice(&msg.sender_pubkey);
 
-    let sig_bytes: [u8; 64] = msg.signature
+    let sig_bytes: [u8; 64] = msg
+        .signature
         .clone()
         .try_into()
         .map_err(|_| anyhow::anyhow!("Invalid signature length"))?;
@@ -162,5 +160,6 @@ pub fn deserialize_wire_message(data: &[u8]) -> Result<WireMessage> {
     if len > MAX_MESSAGE_SIZE {
         anyhow::bail!("Message too large: {len} bytes");
     }
-    serde_json::from_slice(&data[4..4 + len]).map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))
+    serde_json::from_slice(&data[4..4 + len])
+        .map_err(|e| anyhow::anyhow!("Deserialization failed: {e}"))
 }

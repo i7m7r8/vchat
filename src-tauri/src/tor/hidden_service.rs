@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256, Sha512};
 use std::net::TcpListener as StdTcpListener;
 use tokio::net::TcpListener;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 pub fn generate_v3_onion_address() -> String {
     let secret = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
@@ -33,9 +33,7 @@ pub fn pubkey_to_v3_onion(pubkey_bytes: &[u8; 32]) -> String {
     format!("{}.onion", encoded.to_lowercase())
 }
 
-pub fn derive_onion_from_keypair(
-    ed25519_secret: &[u8; 32],
-) -> (String, [u8; 32]) {
+pub fn derive_onion_from_keypair(ed25519_secret: &[u8; 32]) -> (String, [u8; 32]) {
     let secret = ed25519_dalek::SigningKey::from_bytes(ed25519_secret);
     let verifying = secret.verifying_key();
     let pubkey = verifying.to_bytes();
@@ -77,10 +75,7 @@ pub async fn accept_loop(listener: TcpListener) {
     }
 }
 
-async fn handle_connection(
-    mut stream: tokio::net::TcpStream,
-    addr: std::net::SocketAddr,
-) {
+async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::SocketAddr) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     info!("Handling connection from {addr}");
