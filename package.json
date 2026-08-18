@@ -1,7 +1,7 @@
 {
   "name": "vchat",
-  "version": "1.0.0",
-  "description": "Military-grade encrypted P2P messenger over Tor - no servers, no tracking",
+  "version": "2.0.0",
+  "description": "Fully-featured P2P encrypted messenger with Tor, E2E encryption, video calls, file sharing, groups, and screen sharing - no servers, no hosting",
   "private": true,
   "type": "module",
   "scripts": {

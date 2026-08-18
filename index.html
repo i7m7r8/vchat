@@ -1,350 +1,1177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#121212" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Vchat</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
-    <!-- Status Bar Space -->
-    <div class="status-bar-spacer"></div>
 
-    <!-- ===== SCREEN: CHATS LIST ===== -->
-    <div class="screen" id="screen-chats">
+    <!-- ==================== CHATS LIST SCREEN ==================== -->
+    <div id="screen-chats" class="screen active">
       <header class="app-bar">
-        <div class="app-bar-left">
-          <div class="app-logo-small"></div>
-          <h1 class="app-bar-title">Vchat</h1>
-        </div>
-        <div class="app-bar-actions">
-          <button class="icon-btn" id="btn-search-chats" aria-label="Search">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <h1 class="app-bar__title">Vchat</h1>
+        <div class="app-bar__actions">
+          <button class="icon-btn" data-action="toggle-search" aria-label="Search">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button class="icon-btn" data-action="more-menu" aria-label="Menu">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
           </button>
         </div>
       </header>
-      <div class="search-bar" id="search-chats-bar" style="display:none">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="search-chats-input" placeholder="Search conversations..." />
-      </div>
-      <div class="chat-list" id="chat-list">
-        <div class="empty-screen">
-          <div class="empty-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <h3>No conversations yet</h3>
-          <p>Start chatting by adding a contact</p>
-        </div>
-      </div>
-      <button class="fab" id="fab-new-chat" aria-label="New chat">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
-      </button>
-    </div>
 
-    <!-- ===== SCREEN: CHAT VIEW ===== -->
-    <div class="screen" id="screen-chat" style="display:none">
-      <header class="app-bar chat-view-header">
-        <button class="icon-btn" id="btn-back-chat" aria-label="Back">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <div class="chat-view-info">
-          <div class="chat-view-avatar" id="chat-view-avatar"></div>
-          <div class="chat-view-text">
-            <div class="chat-view-name" id="chat-view-name"></div>
-            <div class="chat-view-status" id="chat-view-status">Online</div>
-          </div>
-        </div>
-        <div class="chat-view-actions">
-          <button class="icon-btn" id="btn-call" aria-label="Call">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          </button>
-          <button class="icon-btn" id="btn-video" aria-label="Video call">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          </button>
-        </div>
-      </header>
-      <div class="messages-area" id="messages-area">
-        <div class="messages-list" id="messages-list"></div>
-      </div>
-      <div class="message-composer">
-        <button class="icon-btn composer-attach" aria-label="Attach">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-        </button>
-        <div class="composer-input-wrapper">
-          <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
-        </div>
-        <button class="send-btn" id="btn-send" aria-label="Send">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      <div id="search-bar" class="search-bar hidden">
+        <svg class="search-bar__icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="search-bar__input" type="text" placeholder="Search chats..." data-action="search-chats">
+        <button class="search-bar__clear" data-action="clear-search" aria-label="Clear search">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
+
+      <div class="scroll-area">
+        <ul class="chat-list" data-list="chats">
+          <li class="chat-item" data-chat-id="1" data-action="open-chat">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="alice">
+              <span class="avatar__status avatar__status--online"></span>
+            </div>
+            <div class="chat-item__body">
+              <div class="chat-item__top">
+                <span class="chat-item__name">Alice</span>
+                <span class="chat-item__time">12:34 PM</span>
+              </div>
+              <div class="chat-item__bottom">
+                <span class="chat-item__preview">Hey, are you available for a call?</span>
+                <span class="badge">3</span>
+              </div>
+            </div>
+          </li>
+          <li class="chat-item" data-chat-id="2" data-action="open-chat">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="bob">
+              <span class="avatar__status avatar__status--online"></span>
+            </div>
+            <div class="chat-item__body">
+              <div class="chat-item__top">
+                <span class="chat-item__name">Bob</span>
+                <span class="chat-item__time">11:02 AM</span>
+              </div>
+              <div class="chat-item__bottom">
+                <span class="chat-item__preview">Check the new proposal document</span>
+              </div>
+            </div>
+          </li>
+          <li class="chat-item" data-chat-id="3" data-action="open-chat">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="carol">
+            </div>
+            <div class="chat-item__body">
+              <div class="chat-item__top">
+                <span class="chat-item__name">Carol</span>
+                <span class="chat-item__time">Yesterday</span>
+              </div>
+              <div class="chat-item__bottom">
+                <span class="chat-item__preview">Sounds great, let me know when you're ready</span>
+                <span class="badge">1</span>
+              </div>
+            </div>
+          </li>
+          <li class="chat-item" data-chat-id="4" data-action="open-chat">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="dave">
+            </div>
+            <div class="chat-item__body">
+              <div class="chat-item__top">
+                <span class="chat-item__name">Dave</span>
+                <span class="chat-item__time">Yesterday</span>
+              </div>
+              <div class="chat-item__bottom">
+                <svg class="chat-item__check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 12 5 16 12 6"/><polyline points="7 12 11 16 20 6"/></svg>
+                <span class="chat-item__preview">Meeting at 3pm confirmed</span>
+              </div>
+            </div>
+          </li>
+          <li class="chat-item" data-chat-id="5" data-action="open-chat">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="eve">
+            </div>
+            <div class="chat-item__body">
+              <div class="chat-item__top">
+                <span class="chat-item__name">Eve</span>
+                <span class="chat-item__time">Mon</span>
+              </div>
+              <div class="chat-item__bottom">
+                <svg class="chat-item__mic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                <span class="chat-item__preview">Voice message (0:34)</span>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <button class="fab" data-action="new-chat" aria-label="New chat">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
+      </button>
     </div>
 
-    <!-- ===== SCREEN: CONTACTS ===== -->
-    <div class="screen" id="screen-contacts" style="display:none">
-      <header class="app-bar">
-        <div class="app-bar-left">
-          <h1 class="app-bar-title">Contacts</h1>
+    <!-- ==================== CHAT VIEW SCREEN ==================== -->
+    <div id="screen-chat" class="screen">
+      <header class="app-bar app-bar--chat">
+        <button class="icon-btn" data-action="go-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="app-bar__contact" data-action="show-contact-info">
+          <div class="avatar avatar--sm">
+            <img class="avatar__img" src="" alt="" data-avatar="alice">
+          </div>
+          <div class="app-bar__contact-info">
+            <span class="app-bar__contact-name">Alice</span>
+            <span class="app-bar__contact-status">online</span>
+          </div>
         </div>
-        <div class="app-bar-actions">
-          <button class="icon-btn" id="btn-search-contacts" aria-label="Search">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <div class="app-bar__actions">
+          <button class="icon-btn" data-action="start-call" aria-label="Voice call">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button class="icon-btn" data-action="start-video-call" aria-label="Video call">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
+          <button class="icon-btn" data-action="chat-menu" aria-label="More options">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
           </button>
         </div>
       </header>
-      <div class="search-bar" id="search-contacts-bar" style="display:none">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="search-contacts-input" placeholder="Search contacts..." />
-      </div>
-      <div class="contacts-list" id="contacts-list">
-        <div class="empty-screen">
-          <div class="empty-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+
+      <div class="messages-area scroll-area" data-area="messages">
+        <div class="messages-date-divider">Today</div>
+
+        <div class="message message--in" data-message-id="m1">
+          <div class="message__reply-preview">
+            <span class="message__reply-label">You</span>
+            <span class="message__reply-text">Sure, sounds good!</span>
           </div>
-          <h3>No contacts yet</h3>
-          <p>Add contacts to start chatting</p>
+          <div class="message__bubble">
+            <p class="message__text">Hey! How's the project going?</p>
+            <span class="message__meta">
+              <span class="message__time">12:30 PM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="message message--out" data-message-id="m2">
+          <div class="message__bubble">
+            <p class="message__text">It's going well! Just finished the encryption module. All tests passing.</p>
+            <span class="message__meta">
+              <span class="message__time">12:31 PM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg class="message__checks" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 12 5 16 12 6"/><polyline points="7 12 11 16 20 6"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="message message--out" data-message-id="m3">
+          <div class="message__bubble">
+            <p class="message__text">Want to jump on a call to discuss next steps?</p>
+            <span class="message__meta">
+              <span class="message__time">12:32 PM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg class="message__checks" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 12 5 16 12 6"/><polyline points="7 12 11 16 20 6"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="message message--in" data-message-id="m4">
+          <div class="message__bubble">
+            <p class="message__text">Hey, are you available for a call? I have some questions about the Noise protocol integration.</p>
+            <span class="message__meta">
+              <span class="message__time">12:34 PM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+          </div>
         </div>
       </div>
-      <button class="fab" id="fab-add-contact" aria-label="Add contact">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-      </button>
+
+      <div id="reply-preview" class="reply-preview hidden">
+        <div class="reply-preview__content">
+          <span class="reply-preview__label">Replying to Alice</span>
+          <span class="reply-preview__text"></span>
+        </div>
+        <button class="reply-preview__close" data-action="cancel-reply" aria-label="Cancel reply">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="composer">
+        <button class="icon-btn" data-action="attach-file" aria-label="Attach file">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <div class="composer__input-wrap">
+          <textarea class="composer__input" data-input="message" placeholder="Type a message..." rows="1"></textarea>
+          <button class="icon-btn composer__emoji-btn" data-action="toggle-emoji" aria-label="Emoji">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+        </div>
+        <button class="icon-btn composer__send-btn" data-action="send-message" aria-label="Send" data-state="voice">
+          <svg class="icon-send" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          <svg class="icon-mic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+      </div>
     </div>
 
-    <!-- ===== SCREEN: CALLS ===== -->
-    <div class="screen" id="screen-calls" style="display:none">
-      <header class="app-bar">
-        <div class="app-bar-left">
-          <h1 class="app-bar-title">Calls</h1>
+    <!-- ==================== GROUP CHAT SCREEN ==================== -->
+    <div id="screen-group-chat" class="screen">
+      <header class="app-bar app-bar--chat">
+        <button class="icon-btn" data-action="go-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="app-bar__contact" data-action="show-group-info">
+          <div class="avatar avatar--sm avatar--group">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="app-bar__contact-info">
+            <span class="app-bar__contact-name">Project Team</span>
+            <span class="app-bar__contact-status">5 members</span>
+          </div>
+        </div>
+        <div class="app-bar__actions">
+          <button class="icon-btn" data-action="start-call" aria-label="Call group">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </button>
+          <button class="icon-btn" data-action="group-menu" aria-label="More options">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+          </button>
         </div>
       </header>
-      <div class="calls-list" id="calls-list">
-        <div class="empty-screen">
-          <div class="empty-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+
+      <div class="messages-area scroll-area" data-area="group-messages">
+        <div class="messages-date-divider">Today</div>
+
+        <div class="message message--in" data-message-id="gm1" data-sender="alice">
+          <div class="message__sender-name" style="color: var(--clr-sender-1)">Alice</div>
+          <div class="message__bubble">
+            <p class="message__text">Team standup notes are ready. I've uploaded them to the shared repo.</p>
+            <span class="message__meta">
+              <span class="message__time">10:15 AM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
           </div>
-          <h3>No calls yet</h3>
-          <p>Start a call from any chat</p>
         </div>
+
+        <div class="message message--in" data-message-id="gm2" data-sender="bob">
+          <div class="message__sender-name" style="color: var(--clr-sender-2)">Bob</div>
+          <div class="message__bubble">
+            <p class="message__text">Great, I'll review after lunch. Anyone else have updates?</p>
+            <span class="message__meta">
+              <span class="message__time">10:20 AM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="message message--out" data-message-id="gm3">
+          <div class="message__bubble">
+            <p class="message__text">I've pushed the latest encryption fixes. All CI tests pass now.</p>
+            <span class="message__meta">
+              <span class="message__time">10:25 AM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg class="message__checks" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 12 5 16 12 6"/><polyline points="7 12 11 16 20 6"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="message message--in" data-message-id="gm4" data-sender="carol">
+          <div class="message__sender-name" style="color: var(--clr-sender-3)">Carol</div>
+          <div class="message__bubble">
+            <p class="message__text">Perfect timing! Let's discuss the Noise protocol handshake in our next sync.</p>
+            <span class="message__meta">
+              <span class="message__time">10:30 AM</span>
+              <svg class="message__lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div id="group-reply-preview" class="reply-preview hidden">
+        <div class="reply-preview__content">
+          <span class="reply-preview__label">Replying to Carol</span>
+          <span class="reply-preview__text"></span>
+        </div>
+        <button class="reply-preview__close" data-action="cancel-reply" aria-label="Cancel reply">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="composer">
+        <button class="icon-btn" data-action="attach-file" aria-label="Attach file">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <div class="composer__input-wrap">
+          <textarea class="composer__input" data-input="group-message" placeholder="Type a message..." rows="1"></textarea>
+          <button class="icon-btn composer__emoji-btn" data-action="toggle-emoji" aria-label="Emoji">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+        </div>
+        <button class="icon-btn composer__send-btn" data-action="send-group-message" aria-label="Send" data-state="voice">
+          <svg class="icon-send" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          <svg class="icon-mic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
       </div>
     </div>
 
-    <!-- ===== SCREEN: SETTINGS ===== -->
-    <div class="screen" id="screen-settings" style="display:none">
+    <!-- ==================== CONTACTS SCREEN ==================== -->
+    <div id="screen-contacts" class="screen">
       <header class="app-bar">
-        <div class="app-bar-left">
-          <h1 class="app-bar-title">Settings</h1>
+        <h1 class="app-bar__title">Contacts</h1>
+        <div class="app-bar__actions">
+          <button class="icon-btn" data-action="search-contacts" aria-label="Search contacts">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
         </div>
       </header>
-      <div class="settings-content">
-        <div class="settings-profile">
-          <div class="settings-avatar" id="settings-avatar"></div>
-          <div class="settings-name" id="settings-name">Loading...</div>
-          <div class="settings-onion" id="settings-onion"></div>
-        </div>
 
-        <div class="settings-section">
-          <div class="settings-section-title">Account</div>
-          <div class="settings-item" id="btn-show-qr">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            <span>Show QR Code</span>
-            <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-          <div class="settings-item" id="btn-edit-name">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            <span>Edit Display Name</span>
-            <svg class="chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-        </div>
+      <div class="scroll-area">
+        <ul class="contact-list" data-list="contacts">
+          <li class="contact-item" data-contact-id="c1" data-action="open-contact">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="alice">
+              <span class="avatar__status avatar__status--online"></span>
+            </div>
+            <div class="contact-item__body">
+              <span class="contact-item__name">Alice</span>
+              <span class="contact-item__onion">alice7x...k3q.onion</span>
+            </div>
+          </li>
+          <li class="contact-item" data-contact-id="c2" data-action="open-contact">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="bob">
+            </div>
+            <div class="contact-item__body">
+              <span class="contact-item__name">Bob</span>
+              <span class="contact-item__onion">bob9z...m2p.onion</span>
+            </div>
+          </li>
+          <li class="contact-item" data-contact-id="c3" data-action="open-contact">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="carol">
+              <span class="avatar__status avatar__status--online"></span>
+            </div>
+            <div class="contact-item__body">
+              <span class="contact-item__name">Carol</span>
+              <span class="contact-item__onion">carol4...j8n.onion</span>
+            </div>
+          </li>
+          <li class="contact-item" data-contact-id="c4" data-action="open-contact">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="dave">
+            </div>
+            <div class="contact-item__body">
+              <span class="contact-item__name">Dave</span>
+              <span class="contact-item__onion">dave2w...r5t.onion</span>
+            </div>
+          </li>
+          <li class="contact-item" data-contact-id="c5" data-action="open-contact">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="eve">
+            </div>
+            <div class="contact-item__body">
+              <span class="contact-item__name">Eve</span>
+              <span class="contact-item__onion">eve8a...b1k.onion</span>
+            </div>
+          </li>
+        </ul>
+      </div>
 
-        <div class="settings-section">
-          <div class="settings-section-title">Security</div>
-          <div class="settings-item">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <span>End-to-End Encryption</span>
-            <span class="settings-badge">AES-256-GCM</span>
-          </div>
-          <div class="settings-item">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            <span>Tor Hidden Service</span>
-            <span class="settings-badge" id="tor-status">Connecting...</span>
-          </div>
-          <div class="settings-item">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Noise Protocol</span>
-            <span class="settings-badge">XX_25519</span>
-          </div>
-        </div>
+      <button class="fab" data-action="add-contact" aria-label="Add contact">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      </button>
+    </div>
 
-        <div class="settings-section">
-          <div class="settings-section-title">Danger Zone</div>
-          <div class="settings-item" id="btn-delete-data" style="color:var(--error)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            <span>Delete All Data</span>
-          </div>
+    <!-- ==================== GROUPS SCREEN ==================== -->
+    <div id="screen-groups" class="screen">
+      <header class="app-bar">
+        <h1 class="app-bar__title">Groups</h1>
+        <div class="app-bar__actions">
+          <button class="icon-btn" data-action="search-groups" aria-label="Search groups">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
         </div>
+      </header>
 
-        <div class="settings-section">
-          <div class="settings-section-title">About</div>
-          <div class="settings-item">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span>Version</span>
-            <span class="settings-value">0.1.0</span>
-          </div>
-          <div class="settings-item">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-            <span>Source Code</span>
-            <span class="settings-value">GitHub</span>
-          </div>
-        </div>
+      <div class="scroll-area">
+        <ul class="group-list" data-list="groups">
+          <li class="group-item" data-group-id="g1" data-action="open-group-chat">
+            <div class="avatar avatar--group">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="group-item__body">
+              <div class="group-item__top">
+                <span class="group-item__name">Project Team</span>
+                <span class="group-item__time">10:30 AM</span>
+              </div>
+              <div class="group-item__bottom">
+                <span class="group-item__preview">Carol: Let's discuss the Noise protocol</span>
+                <span class="badge">2</span>
+              </div>
+              <span class="group-item__members">5 members</span>
+            </div>
+          </li>
+          <li class="group-item" data-group-id="g2" data-action="open-group-chat">
+            <div class="avatar avatar--group">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="group-item__body">
+              <div class="group-item__top">
+                <span class="group-item__name">Security Review</span>
+                <span class="group-item__time">Yesterday</span>
+              </div>
+              <div class="group-item__bottom">
+                <span class="group-item__preview">Dave: Audit report is attached</span>
+              </div>
+              <span class="group-item__members">8 members</span>
+            </div>
+          </li>
+          <li class="group-item" data-group-id="g3" data-action="open-group-chat">
+            <div class="avatar avatar--group">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="group-item__body">
+              <div class="group-item__top">
+                <span class="group-item__name">Dev Chat</span>
+                <span class="group-item__time">Mon</span>
+              </div>
+              <div class="group-item__bottom">
+                <span class="group-item__preview">You: Pushed the fix to main</span>
+              </div>
+              <span class="group-item__members">12 members</span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <button class="fab" data-action="create-group" aria-label="Create group">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      </button>
+    </div>
+
+    <!-- ==================== CALLS SCREEN ==================== -->
+    <div id="screen-calls" class="screen">
+      <header class="app-bar">
+        <h1 class="app-bar__title">Calls</h1>
+      </header>
+
+      <div class="tabs">
+        <button class="tab tab--active" data-tab="all" data-action="switch-call-tab">All</button>
+        <button class="tab" data-tab="missed" data-action="switch-call-tab">Missed</button>
+        <button class="tab" data-tab="outgoing" data-action="switch-call-tab">Outgoing</button>
+      </div>
+
+      <div class="scroll-area">
+        <ul class="call-list" data-list="calls">
+          <li class="call-item" data-call-id="cl1">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="alice">
+            </div>
+            <div class="call-item__body">
+              <span class="call-item__name">Alice</span>
+              <div class="call-item__details">
+                <svg class="call-item__direction call-item__direction--incoming" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 17 7"/><polyline points="7 7 17 7 17 17"/></svg>
+                <svg class="call-item__type" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span>12:34 PM</span>
+              </div>
+            </div>
+            <div class="call-item__meta">
+              <span class="call-item__duration">5:23</span>
+              <span class="call-item__date">Today</span>
+            </div>
+          </li>
+          <li class="call-item" data-call-id="cl2">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="bob">
+            </div>
+            <div class="call-item__body">
+              <span class="call-item__name">Bob</span>
+              <div class="call-item__details">
+                <svg class="call-item__direction call-item__direction--outgoing" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 7 7 17"/><polyline points="17 17 7 17 7 7"/></svg>
+                <svg class="call-item__type call-item__type--video" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span>11:02 AM</span>
+              </div>
+            </div>
+            <div class="call-item__meta">
+              <span class="call-item__duration">12:45</span>
+              <span class="call-item__date">Today</span>
+            </div>
+          </li>
+          <li class="call-item call-item--missed" data-call-id="cl3">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="carol">
+            </div>
+            <div class="call-item__body">
+              <span class="call-item__name">Carol</span>
+              <div class="call-item__details">
+                <svg class="call-item__direction call-item__direction--incoming" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 17 17 7"/><polyline points="7 7 17 7 17 17"/></svg>
+                <svg class="call-item__type" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span>Yesterday</span>
+              </div>
+            </div>
+            <div class="call-item__meta">
+              <span class="call-item__date">Missed</span>
+            </div>
+          </li>
+          <li class="call-item" data-call-id="cl4">
+            <div class="avatar">
+              <img class="avatar__img" src="" alt="" data-avatar="dave">
+            </div>
+            <div class="call-item__body">
+              <span class="call-item__name">Dave</span>
+              <div class="call-item__details">
+                <svg class="call-item__direction call-item__direction--outgoing" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 7 7 17"/><polyline points="17 17 7 17 7 7"/></svg>
+                <svg class="call-item__type call-item__type--video" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span>Mon</span>
+              </div>
+            </div>
+            <div class="call-item__meta">
+              <span class="call-item__duration">23:10</span>
+              <span class="call-item__date">Mon</span>
+            </div>
+          </li>
+        </ul>
       </div>
     </div>
 
-    <!-- ===== BOTTOM NAVIGATION ===== -->
-    <nav class="bottom-nav" id="bottom-nav">
-      <button class="nav-item active" data-screen="chats">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        <span>Chats</span>
+    <!-- ==================== SETTINGS SCREEN ==================== -->
+    <div id="screen-settings" class="screen">
+      <header class="app-bar">
+        <h1 class="app-bar__title">Settings</h1>
+      </header>
+
+      <div class="scroll-area">
+        <section class="settings-section">
+          <div class="profile-card" data-action="edit-profile">
+            <div class="avatar avatar--lg">
+              <img class="avatar__img" src="" alt="" data-avatar="me">
+            </div>
+            <div class="profile-card__info">
+              <span class="profile-card__name">You</span>
+              <span class="profile-card__onion">me3x...f9q.onion</span>
+            </div>
+            <svg class="profile-card__chevron" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">Account</h2>
+          <div class="settings-list">
+            <button class="settings-item" data-action="show-qr-code">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/><rect x="14" y="14" width="4" height="4"/><rect x="20" y="20" width="2" height="2"/><rect x="14" y="20" width="2" height="2"/><rect x="20" y="14" width="2" height="2"/></svg>
+              <span class="settings-item__label">Show QR Code</span>
+              <svg class="settings-item__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="settings-item" data-action="edit-display-name">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span class="settings-item__label">Edit Display Name</span>
+              <svg class="settings-item__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">Security</h2>
+          <div class="settings-list">
+            <div class="settings-item settings-item--info">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <div class="settings-item__text">
+                <span class="settings-item__label">E2E Encryption</span>
+                <span class="settings-item__desc">All messages are end-to-end encrypted using Noise Protocol</span>
+              </div>
+              <span class="settings-item__badge settings-item__badge--on">Active</span>
+            </div>
+            <div class="settings-item settings-item--info">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <div class="settings-item__text">
+                <span class="settings-item__label">Tor Network</span>
+                <span class="settings-item__desc">Connected via Tor (3 hops)</span>
+              </div>
+              <span class="settings-item__badge settings-item__badge--on">Connected</span>
+            </div>
+            <div class="settings-item settings-item--info">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <div class="settings-item__text">
+                <span class="settings-item__label">Noise Protocol</span>
+                <span class="settings-item__desc">XX handshake pattern with Curve25519, AES-256-GCM, BLAKE2b</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">Privacy</h2>
+          <div class="settings-list">
+            <div class="settings-item">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span class="settings-item__label">Read Receipts</span>
+              <label class="toggle">
+                <input class="toggle__input" type="checkbox" data-setting="read-receipts" checked>
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="settings-item">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>
+              <span class="settings-item__label">Typing Indicators</span>
+              <label class="toggle">
+                <input class="toggle__input" type="checkbox" data-setting="typing-indicators" checked>
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+            <div class="settings-item">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span class="settings-item__label">Disappearing Messages</span>
+              <label class="toggle">
+                <input class="toggle__input" type="checkbox" data-setting="disappearing-messages">
+                <span class="toggle__slider"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">Appearance</h2>
+          <div class="settings-list">
+            <div class="settings-item">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <span class="settings-item__label">Theme</span>
+              <div class="settings-item__selector">
+                <button class="theme-btn theme-btn--active" data-theme="dark" data-action="set-theme">Dark</button>
+                <button class="theme-btn" data-theme="midnight" data-action="set-theme">Midnight</button>
+                <button class="theme-btn" data-theme="amoled" data-action="set-theme">AMOLED</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">Danger Zone</h2>
+          <div class="settings-list">
+            <button class="settings-item settings-item--danger" data-action="delete-all-data">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              <span class="settings-item__label">Delete All Data</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section__title">About</h2>
+          <div class="settings-list">
+            <div class="settings-item settings-item--info">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <div class="settings-item__text">
+                <span class="settings-item__label">Version</span>
+                <span class="settings-item__desc">1.0.0 (build 42)</span>
+              </div>
+            </div>
+            <a class="settings-item settings-item--info" href="#" data-action="open-source">
+              <svg class="settings-item__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+              <span class="settings-item__label">Source Code</span>
+              <svg class="settings-item__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ==================== BOTTOM NAVIGATION ==================== -->
+    <nav id="bottom-nav" class="bottom-nav" role="navigation" aria-label="Main navigation">
+      <button class="bottom-nav__item bottom-nav__item--active" data-nav="chats" data-action="navigate">
+        <svg class="bottom-nav__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="bottom-nav__label">Chats</span>
+        <span class="bottom-nav__badge">4</span>
       </button>
-      <button class="nav-item" data-screen="contacts">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Contacts</span>
+      <button class="bottom-nav__item" data-nav="groups" data-action="navigate">
+        <svg class="bottom-nav__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="bottom-nav__label">Groups</span>
       </button>
-      <button class="nav-item" data-screen="calls">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        <span>Calls</span>
+      <button class="bottom-nav__item" data-nav="calls" data-action="navigate">
+        <svg class="bottom-nav__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span class="bottom-nav__label">Calls</span>
       </button>
-      <button class="nav-item" data-screen="settings">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Settings</span>
+      <button class="bottom-nav__item" data-nav="contacts" data-action="navigate">
+        <svg class="bottom-nav__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="bottom-nav__label">Contacts</span>
+      </button>
+      <button class="bottom-nav__item" data-nav="settings" data-action="navigate">
+        <svg class="bottom-nav__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="bottom-nav__label">Settings</span>
       </button>
     </nav>
 
-    <!-- ===== SCREEN: VIDEO CALL (overlay) ===== -->
-    <div class="call-overlay" id="call-overlay" style="display:none">
-      <div class="call-bg"></div>
-      <div class="call-content">
-        <div class="call-avatar" id="call-avatar"></div>
-        <div class="call-name" id="call-name">Unknown</div>
-        <div class="call-status" id="call-status">Calling...</div>
-        <div class="call-timer" id="call-timer" style="display:none">00:00</div>
-      </div>
-      <div class="call-controls">
-        <button class="call-control-btn" id="btn-mute">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <span>Mute</span>
-        </button>
-        <button class="call-control-btn" id="btn-speaker">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-          <span>Speaker</span>
-        </button>
-        <button class="call-control-btn call-end-btn" id="btn-end-call">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
-          <span>End</span>
-        </button>
-        <button class="call-control-btn" id="btn-video-toggle">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          <span>Video</span>
-        </button>
-        <button class="call-control-btn" id="btn-screen-toggle">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span>Screen</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- ===== MODAL: ADD CONTACT ===== -->
-    <div class="modal-overlay" id="modal-add-contact" style="display:none">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <h2>Add Contact</h2>
-          <button class="icon-btn" id="btn-close-add-contact">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <!-- ==================== CALL OVERLAY ==================== -->
+    <div id="call-overlay" class="call-overlay hidden" data-state="idle">
+      <div class="call-overlay__bg"></div>
+      <div class="call-overlay__content">
+        <div class="call-overlay__status" data-text="Ringing...">Ringing...</div>
+        <div class="avatar avatar--xl">
+          <img class="avatar__img" src="" alt="" data-avatar="alice">
+        </div>
+        <h2 class="call-overlay__name">Alice</h2>
+        <span class="call-overlay__timer">00:00</span>
+        <div class="call-overlay__controls">
+          <button class="call-overlay__btn" data-action="toggle-mute" aria-label="Mute">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span>Mute</span>
           </button>
-        </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Display Name</label>
-            <input type="text" id="input-contact-name" placeholder="Alice" />
-          </div>
-          <div class="input-group">
-            <label>Onion Address</label>
-            <input type="text" id="input-contact-onion" placeholder="abc123.onion" class="mono" />
-          </div>
-          <div class="input-group">
-            <label>Public Key</label>
-            <input type="text" id="input-contact-key" placeholder="Hex public key" class="mono" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-flat" id="btn-cancel-add-contact">Cancel</button>
-          <button class="btn-filled" id="btn-save-add-contact">Add</button>
+          <button class="call-overlay__btn" data-action="toggle-speaker" aria-label="Speaker">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span>Speaker</span>
+          </button>
+          <button class="call-overlay__btn call-overlay__btn--end" data-action="end-call" aria-label="End call">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            <span>End</span>
+          </button>
+          <button class="call-overlay__btn" data-action="toggle-video" aria-label="Toggle video">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span>Video</span>
+          </button>
+          <button class="call-overlay__btn" data-action="toggle-screen-share" aria-label="Screen share">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span>Share</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- ===== MODAL: QR CODE ===== -->
-    <div class="modal-overlay" id="modal-qr" style="display:none">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <h2>QR Code</h2>
-          <button class="icon-btn" id="btn-close-qr">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <!-- ==================== MODALS & SHEETS ==================== -->
+
+    <!-- Add Contact Modal -->
+    <div id="modal-add-contact" class="modal hidden" data-modal="add-contact">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet">
+        <div class="modal__header">
+          <h2 class="modal__title">Add Contact</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="modal-body qr-body">
-          <div class="qr-display" id="qr-display"></div>
-          <p class="qr-hint">Share this to let others add you as a contact</p>
+        <div class="modal__body">
+          <div class="form-group">
+            <label class="form-label" for="contact-name">Display Name</label>
+            <input class="form-input" type="text" id="contact-name" placeholder="Alice" data-input="contact-name">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="contact-onion">Onion Address</label>
+            <input class="form-input" type="text" id="contact-onion" placeholder="alice7x...k3q.onion" data-input="contact-onion">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="contact-pubkey">Public Key</label>
+            <input class="form-input" type="text" id="contact-pubkey" placeholder="Paste public key..." data-input="contact-pubkey">
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary" data-action="close-modal">Cancel</button>
+          <button class="btn btn--primary" data-action="save-contact">Add Contact</button>
+        </div>
+      </div>
+    </div>
 
-          <div class="qr-divider"><span>or scan a contact's QR</span></div>
-
-          <div class="qr-scanner-actions">
-            <button class="btn-filled" id="btn-scan-qr" style="width:100%">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;vertical-align:middle"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Open Camera
+    <!-- QR Code Modal -->
+    <div id="modal-qr-code" class="modal hidden" data-modal="qr-code">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet">
+        <div class="modal__header">
+          <h2 class="modal__title">QR Code</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body modal__body--center">
+          <div class="qr-display">
+            <div class="qr-display__code" data-qr="my-code">
+              <svg viewBox="0 0 100 100" width="180" height="180">
+                <rect x="5" y="5" width="25" height="25" rx="2" fill="currentColor"/>
+                <rect x="70" y="5" width="25" height="25" rx="2" fill="currentColor"/>
+                <rect x="5" y="70" width="25" height="25" rx="2" fill="currentColor"/>
+                <rect x="10" y="10" width="15" height="15" rx="1" fill="var(--clr-bg)"/>
+                <rect x="75" y="10" width="15" height="15" rx="1" fill="var(--clr-bg)"/>
+                <rect x="10" y="75" width="15" height="15" rx="1" fill="var(--clr-bg)"/>
+                <rect x="14" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                <rect x="79" y="14" width="7" height="7" rx="1" fill="currentColor"/>
+                <rect x="14" y="79" width="7" height="7" rx="1" fill="currentColor"/>
+                <rect x="35" y="5" width="5" height="5" fill="currentColor"/>
+                <rect x="45" y="5" width="5" height="5" fill="currentColor"/>
+                <rect x="55" y="15" width="5" height="5" fill="currentColor"/>
+                <rect x="35" y="25" width="5" height="5" fill="currentColor"/>
+                <rect x="50" y="25" width="5" height="5" fill="currentColor"/>
+                <rect x="65" y="35" width="5" height="5" fill="currentColor"/>
+                <rect x="40" y="40" width="20" height="20" rx="4" fill="currentColor"/>
+                <rect x="45" y="45" width="10" height="10" rx="2" fill="var(--clr-bg)"/>
+                <rect x="5" y="40" width="5" height="5" fill="currentColor"/>
+                <rect x="15" y="45" width="5" height="5" fill="currentColor"/>
+                <rect x="25" y="35" width="5" height="5" fill="currentColor"/>
+                <rect x="35" y="55" width="5" height="5" fill="currentColor"/>
+                <rect x="55" y="55" width="5" height="5" fill="currentColor"/>
+                <rect x="70" y="40" width="5" height="5" fill="currentColor"/>
+                <rect x="80" y="50" width="5" height="5" fill="currentColor"/>
+                <rect x="90" y="40" width="5" height="5" fill="currentColor"/>
+                <rect x="35" y="70" width="5" height="5" fill="currentColor"/>
+                <rect x="50" y="75" width="5" height="5" fill="currentColor"/>
+                <rect x="65" y="70" width="5" height="5" fill="currentColor"/>
+                <rect x="75" y="80" width="5" height="5" fill="currentColor"/>
+                <rect x="85" y="85" width="10" height="10" rx="2" fill="currentColor"/>
+                <rect x="70" y="90" width="5" height="5" fill="currentColor"/>
+                <rect x="55" y="85" width="5" height="5" fill="currentColor"/>
+              </svg>
+            </div>
+            <p class="qr-display__label">Scan to add me as a contact</p>
+          </div>
+          <div class="qr-display__actions">
+            <button class="btn btn--secondary" data-action="scan-qr">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Scan QR Code
             </button>
-            <button class="btn-flat" id="btn-scan-qr-file" style="width:100%;margin-top:8px">
-              Upload QR Image
+            <button class="btn btn--secondary" data-action="share-qr">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share
             </button>
           </div>
-
-          <div id="qr-scanner-area" style="display:none;margin-top:12px">
-            <video id="qr-scanner-video" autoplay playsinline style="width:100%;max-width:300px;border-radius:12px;background:#000"></video>
+          <div class="qr-camera hidden" data-area="qr-camera">
+            <div class="qr-camera__viewfinder">
+              <div class="qr-camera__corner qr-camera__corner--tl"></div>
+              <div class="qr-camera__corner qr-camera__corner--tr"></div>
+              <div class="qr-camera__corner qr-camera__corner--bl"></div>
+              <div class="qr-camera__corner qr-camera__corner--br"></div>
+              <div class="qr-camera__scan-line"></div>
+            </div>
+            <p class="qr-camera__hint">Point camera at a Vchat QR code</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ===== MODAL: EDIT NAME ===== -->
-    <div class="modal-overlay" id="modal-edit-name" style="display:none">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <h2>Edit Name</h2>
-          <button class="icon-btn" id="btn-close-edit-name">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <!-- Edit Name Modal -->
+    <div id="modal-edit-name" class="modal hidden" data-modal="edit-name">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet">
+        <div class="modal__header">
+          <h2 class="modal__title">Edit Display Name</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>Display Name</label>
-            <input type="text" id="input-new-name" placeholder="Your name" />
+        <div class="modal__body">
+          <div class="form-group">
+            <label class="form-label" for="display-name">Display Name</label>
+            <input class="form-input" type="text" id="display-name" placeholder="Your name" data-input="display-name">
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-flat" id="btn-cancel-edit-name">Cancel</button>
-          <button class="btn-filled" id="btn-save-edit-name">Save</button>
+        <div class="modal__footer">
+          <button class="btn btn--secondary" data-action="close-modal">Cancel</button>
+          <button class="btn btn--primary" data-action="save-name">Save</button>
         </div>
       </div>
     </div>
 
-    <!-- ===== TOAST ===== -->
-    <div class="toast" id="toast"></div>
+    <!-- Create Group Modal -->
+    <div id="modal-create-group" class="modal hidden" data-modal="create-group">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet">
+        <div class="modal__header">
+          <h2 class="modal__title">Create Group</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="form-group">
+            <label class="form-label" for="group-name">Group Name</label>
+            <input class="form-input" type="text" id="group-name" placeholder="Project Team" data-input="group-name">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="group-desc">Description</label>
+            <textarea class="form-input form-input--textarea" id="group-desc" placeholder="What's this group about?" rows="3" data-input="group-desc"></textarea>
+          </div>
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--secondary" data-action="close-modal">Cancel</button>
+          <button class="btn btn--primary" data-action="create-group">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message Context Menu -->
+    <div id="context-menu" class="context-menu hidden" data-menu="message">
+      <button class="context-menu__item" data-action="reply-message">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+        Reply
+      </button>
+      <button class="context-menu__item" data-action="copy-message">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copy
+      </button>
+      <button class="context-menu__item" data-action="forward-message">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+        Forward
+      </button>
+      <button class="context-menu__item" data-action="disappearing-message">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Disappearing Message
+      </button>
+      <hr class="context-menu__divider">
+      <button class="context-menu__item context-menu__item--danger" data-action="delete-message">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        Delete
+      </button>
+    </div>
+
+    <!-- Group Info Modal -->
+    <div id="modal-group-info" class="modal hidden" data-modal="group-info">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet modal__sheet--tall">
+        <div class="modal__header">
+          <h2 class="modal__title">Group Info</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="group-info-header">
+            <div class="avatar avatar--lg avatar--group">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <h3 class="group-info-header__name">Project Team</h3>
+            <p class="group-info-header__desc">Collaboration space for the Vchat project team</p>
+          </div>
+          <h4 class="group-info-section__title">Members (5)</h4>
+          <ul class="member-list">
+            <li class="member-list__item">
+              <div class="avatar avatar--sm">
+                <img class="avatar__img" src="" alt="" data-avatar="alice">
+              </div>
+              <div class="member-list__info">
+                <span class="member-list__name">Alice</span>
+                <span class="member-list__role">Admin</span>
+              </div>
+            </li>
+            <li class="member-list__item">
+              <div class="avatar avatar--sm">
+                <img class="avatar__img" src="" alt="" data-avatar="bob">
+              </div>
+              <div class="member-list__info">
+                <span class="member-list__name">Bob</span>
+                <span class="member-list__role">Admin</span>
+              </div>
+            </li>
+            <li class="member-list__item">
+              <div class="avatar avatar--sm">
+                <img class="avatar__img" src="" alt="" data-avatar="carol">
+              </div>
+              <div class="member-list__info">
+                <span class="member-list__name">Carol</span>
+                <span class="member-list__role">Member</span>
+              </div>
+            </li>
+            <li class="member-list__item">
+              <div class="avatar avatar--sm">
+                <img class="avatar__img" src="" alt="" data-avatar="dave">
+              </div>
+              <div class="member-list__info">
+                <span class="member-list__name">Dave</span>
+                <span class="member-list__role">Member</span>
+              </div>
+            </li>
+            <li class="member-list__item">
+              <div class="avatar avatar--sm">
+                <img class="avatar__img" src="" alt="" data-avatar="eve">
+              </div>
+              <div class="member-list__info">
+                <span class="member-list__name">Eve</span>
+                <span class="member-list__role">Member</span>
+              </div>
+            </li>
+          </ul>
+          <button class="btn btn--outline btn--block" data-action="add-group-member">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Add Member
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact Info Sheet -->
+    <div id="modal-contact-info" class="modal hidden" data-modal="contact-info">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet">
+        <div class="modal__header">
+          <h2 class="modal__title">Contact Info</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="contact-info-header">
+            <div class="avatar avatar--lg">
+              <img class="avatar__img" src="" alt="" data-avatar="alice">
+              <span class="avatar__status avatar__status--online"></span>
+            </div>
+            <h3 class="contact-info-header__name">Alice</h3>
+            <span class="contact-info-header__status">online</span>
+          </div>
+          <div class="contact-info-details">
+            <div class="contact-info-detail">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
+              <div>
+                <span class="contact-info-detail__label">Onion Address</span>
+                <span class="contact-info-detail__value">alice7x...k3q.onion</span>
+              </div>
+            </div>
+            <div class="contact-info-detail">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <div>
+                <span class="contact-info-detail__label">Public Key</span>
+                <span class="contact-info-detail__value">-----BEGIN PUBLIC KEY-----\nMIIBIjAN...kJv\n-----END PUBLIC KEY-----</span>
+              </div>
+            </div>
+            <div class="contact-info-detail">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div>
+                <span class="contact-info-detail__label">Disappearing Messages</span>
+                <span class="contact-info-detail__value">Off</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- File Picker Modal -->
+    <div id="modal-file-picker" class="modal hidden" data-modal="file-picker">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet modal__sheet--short">
+        <div class="modal__header">
+          <h2 class="modal__title">Share File</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="file-picker-grid">
+            <button class="file-picker-option" data-action="pick-photo">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              </div>
+              <span>Photo</span>
+            </button>
+            <button class="file-picker-option" data-action="pick-video">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              </div>
+              <span>Video</span>
+            </button>
+            <button class="file-picker-option" data-action="pick-document">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <span>Document</span>
+            </button>
+            <button class="file-picker-option" data-action="pick-audio">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              </div>
+              <span>Audio</span>
+            </button>
+            <button class="file-picker-option" data-action="pick-contact-file">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <span>Contact</span>
+            </button>
+            <button class="file-picker-option" data-action="pick-location">
+              <div class="file-picker-option__icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <span>Location</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emoji Picker -->
+    <div id="modal-emoji-picker" class="modal hidden" data-modal="emoji-picker">
+      <div class="modal__backdrop" data-action="close-modal"></div>
+      <div class="modal__sheet modal__sheet--short">
+        <div class="modal__header">
+          <h2 class="modal__title">Emoji</h2>
+          <button class="icon-btn" data-action="close-modal" aria-label="Close">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="modal__body">
+          <div class="emoji-search">
+            <input class="form-input" type="text" placeholder="Search emoji..." data-input="emoji-search">
+          </div>
+          <div class="emoji-grid" data-grid="emoji">
+            <button class="emoji-grid__item" data-emoji="😀">😀</button>
+            <button class="emoji-grid__item" data-emoji="😂">😂</button>
+            <button class="emoji-grid__item" data-emoji="😍">😍</button>
+            <button class="emoji-grid__item" data-emoji="🤔">🤔</button>
+            <button class="emoji-grid__item" data-emoji="😎">😎</button>
+            <button class="emoji-grid__item" data-emoji="🥳">🥳</button>
+            <button class="emoji-grid__item" data-emoji="😇">😇</button>
+            <button class="emoji-grid__item" data-emoji="🤩">🤩</button>
+            <button class="emoji-grid__item" data-emoji="😭">😭</button>
+            <button class="emoji-grid__item" data-emoji="😤">😤</button>
+            <button class="emoji-grid__item" data-emoji="🤯">🤯</button>
+            <button class="emoji-grid__item" data-emoji="😴">😴</button>
+            <button class="emoji-grid__item" data-emoji="👍">👍</button>
+            <button class="emoji-grid__item" data-emoji="👎">👎</button>
+            <button class="emoji-grid__item" data-emoji="❤️">❤️</button>
+            <button class="emoji-grid__item" data-emoji="🔥">🔥</button>
+            <button class="emoji-grid__item" data-emoji="✅">✅</button>
+            <button class="emoji-grid__item" data-emoji="🎉">🎉</button>
+            <button class="emoji-grid__item" data-emoji="🙏">🙏</button>
+            <button class="emoji-grid__item" data-emoji="💪">💪</button>
+            <button class="emoji-grid__item" data-emoji="🤝">🤝</button>
+            <button class="emoji-grid__item" data-emoji="👏">👏</button>
+            <button class="emoji-grid__item" data-emoji="💯">💯</button>
+            <button class="emoji-grid__item" data-emoji="⚡">⚡</button>
+            <button class="emoji-grid__item" data-emoji="🔒">🔒</button>
+            <button class="emoji-grid__item" data-emoji="🛡️">🛡️</button>
+            <button class="emoji-grid__item" data-emoji="🔑">🔑</button>
+            <button class="emoji-grid__item" data-emoji="💻">💻</button>
+            <button class="emoji-grid__item" data-emoji="🚀">🚀</button>
+            <button class="emoji-grid__item" data-emoji="🫡">🫡</button>
+            <button class="emoji-grid__item" data-emoji="🫠">🫠</button>
+            <button class="emoji-grid__item" data-emoji="🫶">🫶</button>
+            <button class="emoji-grid__item" data-emoji="👀">👀</button>
+            <button class="emoji-grid__item" data-emoji="🤷">🤷</button>
+            <button class="emoji-grid__item" data-emoji="🤦">🤦</button>
+            <button class="emoji-grid__item" data-emoji="😉">😉</button>
+            <button class="emoji-grid__item" data-emoji="🥳">🥳</button>
+            <button class="emoji-grid__item" data-emoji="🫡">🫡</button>
+            <button class="emoji-grid__item" data-emoji="😇">😇</button>
+            <button class="emoji-grid__item" data-emoji="🤗">🤗</button>
+            <button class="emoji-grid__item" data-emoji="🤫">🤫</button>
+            <button class="emoji-grid__item" data-emoji="🤐">🤐</button>
+            <button class="emoji-grid__item" data-emoji="🫢">🫢</button>
+            <button class="emoji-grid__item" data-emoji="😏">😏</button>
+            <button class="emoji-grid__item" data-emoji="😬">😬</button>
+            <button class="emoji-grid__item" data-emoji="🫣">🫣</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TOAST NOTIFICATION ==================== -->
+    <div id="toast" class="toast hidden" data-role="toast">
+      <span class="toast__text" data-text="toast-message"></span>
+      <button class="toast__action" data-action="toast-action">Undo</button>
+    </div>
+
   </div>
 
   <script type="module" src="/src/main.ts"></script>

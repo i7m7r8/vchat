@@ -11,6 +11,9 @@ pub enum VchatError {
     Qr(String),
     WebRtc(String),
     Auth(String),
+    FileTransfer(String),
+    Group(String),
+    RateLimit(String),
 }
 
 impl fmt::Display for VchatError {
@@ -24,6 +27,9 @@ impl fmt::Display for VchatError {
             Self::Qr(e) => write!(f, "QR: {e}"),
             Self::WebRtc(e) => write!(f, "WEBRTC: {e}"),
             Self::Auth(e) => write!(f, "AUTH: {e}"),
+            Self::FileTransfer(e) => write!(f, "FILE_TRANSFER: {e}"),
+            Self::Group(e) => write!(f, "GROUP: {e}"),
+            Self::RateLimit(e) => write!(f, "RATE_LIMIT: {e}"),
         }
     }
 }

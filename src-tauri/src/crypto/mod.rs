@@ -48,16 +48,21 @@ pub async fn generate_identity(display_name: &str) -> Result<Identity> {
     combined_pub.extend_from_slice(&x25519_kp.public_bytes());
     combined_pub.extend_from_slice(&ed25519_kp.public_key_bytes());
 
+    let x25519_secret_hex = hex::encode(x25519_kp.secret_bytes());
+    let ed25519_secret_hex = ed25519_kp.secret_key_hex();
+
     let identity = Identity {
         public_key: hex::encode(&combined_pub),
         onion_address,
         display_name: display_name.to_string(),
     };
 
-    let x25519_secret_hex = hex::encode(x25519_kp.secret_bytes());
-    let ed25519_secret_hex = ed25519_kp.secret_key_hex();
-
-    store::save_identity_with_keys(&identity, &x25519_secret_hex, &ed25519_secret_hex).await?;
+    store::save_identity_with_keys(
+        &identity,
+        &x25519_secret_hex,
+        &ed25519_secret_hex,
+    )
+    .await?;
 
     crate::error::audit_log("identity_created", &format!("onion={}", identity.onion_address));
 
@@ -206,20 +211,23 @@ pub fn parse_qr_data(qr_data: &str) -> Result<Contact> {
         anyhow::bail!("Public key must be 64 bytes, got {}", key_bytes.len());
     }
 
+    let now = chrono::Utc::now().timestamp();
     let contact = Contact {
         id: uuid::Uuid::new_v4().to_string(),
-        display_name: data["name"]
-            .as_str()
-            .or_else(|| data["display_name"].as_str())
-            .unwrap_or("Unknown")
-            .to_string(),
-        public_key: public_key.to_string(),
         onion_address: data["onion"]
             .as_str()
             .or_else(|| data["onion_address"].as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing onion address"))?
             .to_string(),
-        added_at: chrono::Utc::now().timestamp(),
+        public_key: public_key.to_string(),
+        display_name: data["name"]
+            .as_str()
+            .or_else(|| data["display_name"].as_str())
+            .unwrap_or("Unknown")
+            .to_string(),
+        added_at: now,
+        verified: false,
+        blocked: false,
     };
 
     crate::error::audit_log("qr_scanned", &format!("contact={}", contact.display_name));

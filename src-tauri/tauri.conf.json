@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholasgasior/tauri-config-schema/tauri-v2/schema.json",
   "productName": "Vchat",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "identifier": "org.vchat.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:* ws://localhost:*; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
@@ -34,7 +34,7 @@
       "icons/128x128@2x.png"
     ],
     "category": "Utility",
-    "shortDescription": "Military-grade encrypted P2P messenger over Tor",
-    "longDescription": "Vchat is a peer-to-peer encrypted messenger that routes all traffic through the Tor network. No servers, no tracking, no metadata collection. Each user runs their own Tor hidden service. Messages are encrypted with AES-256-GCM, key exchange uses X25519 ECDH, and the Noise protocol provides mutual authentication."
+    "shortDescription": "Fully-featured P2P encrypted messenger over Tor",
+    "longDescription": "Vchat is a peer-to-peer encrypted messenger that routes all traffic through the Tor network. No servers, no tracking, no metadata collection. Features include text messaging, group chats, voice/video calls, screen sharing, file transfers, emoji reactions, disappearing messages, and more. Messages are encrypted with AES-256-GCM, key exchange uses X25519 ECDH, and the Noise protocol provides mutual authentication."
   }
 }

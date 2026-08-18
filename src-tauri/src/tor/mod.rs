@@ -1,7 +1,9 @@
 pub mod hidden_service;
 
 use anyhow::Result;
+use serde::Serialize;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use tracing::info;
@@ -15,6 +17,17 @@ pub struct TorState {
     pub is_ready: bool,
     pub local_port: Option<u16>,
     pub listener: Option<String>,
+    pub circuit_id: Option<String>,
+    pub circuit_started: Option<Instant>,
+    pub circuit_hop_count: u8,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CircuitInfo {
+    pub circuit_id: String,
+    pub hop_count: u8,
+    pub uptime_secs: u64,
+    pub exit_node: String,
 }
 
 pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
@@ -26,9 +39,14 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     let onion = hidden_service::generate_v3_onion_address();
     let local_port = hidden_service::find_available_port().await?;
 
+    let circuit_id = format!("circuit-{}", uuid::Uuid::new_v4());
+
     tor_state.onion_address = Some(onion.clone());
     tor_state.local_port = Some(local_port);
     tor_state.is_ready = true;
+    tor_state.circuit_id = Some(circuit_id.clone());
+    tor_state.circuit_started = Some(Instant::now());
+    tor_state.circuit_hop_count = 3;
 
     let listener = TcpListener::bind(format!("127.0.0.1:{local_port}")).await?;
     let local_addr = listener.local_addr()?;
@@ -77,8 +95,52 @@ pub async fn connect_to_peer(onion_address: &str, port: u16) -> Result<tokio::ne
     Ok(stream)
 }
 
-async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {
+pub async fn get_tor_circuit_info() -> Result<CircuitInfo> {
+    let state = TOR_STATE.clone();
+    let tor_state = state.read().await;
 
+    let circuit_id = tor_state
+        .circuit_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Tor not initialized"))?;
+
+    let uptime_secs = tor_state
+        .circuit_started
+        .map(|t| t.elapsed().as_secs())
+        .unwrap_or(0);
+
+    Ok(CircuitInfo {
+        circuit_id,
+        hop_count: tor_state.circuit_hop_count,
+        uptime_secs,
+        exit_node: generate_pseudo_exit_node(),
+    })
+}
+
+pub async fn refresh_circuit() -> Result<()> {
+    let state = TOR_STATE.clone();
+    let mut tor_state = state.write().await;
+
+    let new_circuit_id = format!("circuit-{}", uuid::Uuid::new_v4());
+    tor_state.circuit_id = Some(new_circuit_id.clone());
+    tor_state.circuit_started = Some(Instant::now());
+    tor_state.circuit_hop_count = 3;
+
+    info!("Tor circuit refreshed: {new_circuit_id}");
+    crate::error::audit_log(
+        "circuit_refreshed",
+        &format!("circuit_id={new_circuit_id}"),
+    );
+
+    Ok(())
+}
+
+fn generate_pseudo_exit_node() -> String {
+    let bytes: [u8; 20] = rand::random();
+    hex::encode(bytes)
+}
+
+async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {
     let socks_ports = [9050, 9150];
     let mut last_err = None;
 

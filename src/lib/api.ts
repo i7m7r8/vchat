@@ -12,6 +12,8 @@ export interface Contact {
   public_key: string;
   onion_address: string;
   added_at: number;
+  verified: boolean;
+  blocked: boolean;
 }
 
 export interface Message {
@@ -23,6 +25,75 @@ export interface Message {
   encrypted: boolean;
   message_type: string;
   sequence_num: number;
+  reply_to: string | null;
+  delivered: boolean;
+  read: boolean;
+  expires_at: number | null;
+}
+
+export interface Reaction {
+  id: string;
+  message_id: string;
+  sender: string;
+  emoji: string;
+  timestamp: number;
+}
+
+export interface TypingStatus {
+  peer_onion: string;
+  is_typing: boolean;
+  last_typing_at: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  created_by: string;
+  created_at: number;
+  member_count: number;
+}
+
+export interface GroupMember {
+  group_id: string;
+  onion_address: string;
+  public_key: string;
+  display_name: string;
+  role: string;
+  joined_at: number;
+}
+
+export interface GroupMessage {
+  id: string;
+  group_id: string;
+  sender: string;
+  content: string;
+  timestamp: number;
+  message_type: string;
+  reply_to: string | null;
+}
+
+export interface CallLogEntry {
+  id: string;
+  peer_onion: string;
+  call_type: string;
+  direction: string;
+  started_at: number;
+  ended_at: number | null;
+  duration_secs: number | null;
+  status: string;
+}
+
+export interface FileTransfer {
+  id: string;
+  sender: string;
+  recipient: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  status: string;
+  started_at: number;
+  completed_at: number | null;
 }
 
 export interface TorStatus {
@@ -39,88 +110,172 @@ export interface EncryptionInfo {
   onion_version: string;
 }
 
+export interface AppSettings {
+  disappearing_messages_default: boolean;
+  default_ttl_secs: number;
+  read_receipts: boolean;
+  typing_indicators: boolean;
+  notifications_enabled: boolean;
+  theme: string;
+}
+
 export const api = {
-  async initIdentity(displayName: string): Promise<Identity> {
-    return invoke("init_identity", { displayName });
-  },
+  // ── Identity ────────────────────────────────────────────────────────────
+  initIdentity: (displayName: string): Promise<Identity> =>
+    invoke("init_identity", { displayName }),
 
-  async getIdentity(): Promise<Identity | null> {
-    return invoke("get_identity");
-  },
+  getIdentity: (): Promise<Identity> =>
+    invoke("get_identity"),
 
-  async getOnionAddress(): Promise<string> {
-    return invoke("get_onion_address");
-  },
+  getOnionAddress: (): Promise<string> =>
+    invoke("get_onion_address"),
 
-  async sendMessage(
-    recipientOnion: string,
-    content: string,
-    messageType: string
-  ): Promise<Message> {
-    return invoke("send_message", {
-      recipientOnion,
-      content,
-      messageType,
-    });
-  },
+  // ── Contacts ────────────────────────────────────────────────────────────
+  addContact: (displayName: string, publicKey: string, onionAddress: string): Promise<Contact> =>
+    invoke("add_contact", { displayName, publicKey, onionAddress }),
 
-  async startVideoCall(recipientOnion: string): Promise<string> {
-    return invoke("start_video_call", { recipientOnion });
-  },
+  getContacts: (): Promise<Contact[]> =>
+    invoke("get_contacts"),
 
-  async answerVideoCall(callId: string): Promise<void> {
-    return invoke("answer_video_call", { callId });
-  },
+  getContact: (onionAddress: string): Promise<Contact> =>
+    invoke("get_contact", { onionAddress }),
 
-  async endVideoCall(callId: string): Promise<void> {
-    return invoke("end_video_call", { callId });
-  },
+  deleteContact: (onionAddress: string): Promise<void> =>
+    invoke("delete_contact", { onionAddress }),
 
-  async startScreenShare(callId: string): Promise<void> {
-    return invoke("start_screen_share", { callId });
-  },
+  blockContact: (onionAddress: string): Promise<void> =>
+    invoke("block_contact", { onionAddress }),
 
-  async stopScreenShare(callId: string): Promise<void> {
-    return invoke("stop_screen_share", { callId });
-  },
+  unblockContact: (onionAddress: string): Promise<void> =>
+    invoke("unblock_contact", { onionAddress }),
 
-  async addContact(
-    displayName: string,
-    publicKey: string,
-    onionAddress: string
-  ): Promise<Contact> {
-    return invoke("add_contact", {
-      displayName,
-      publicKey,
-      onionAddress,
-    });
-  },
+  verifyContact: (onionAddress: string): Promise<void> =>
+    invoke("verify_contact", { onionAddress }),
 
-  async getContacts(): Promise<Contact[]> {
-    return invoke("get_contacts");
-  },
+  // ── Messages ────────────────────────────────────────────────────────────
+  sendMessage: (recipientOnion: string, content: string, messageType: string): Promise<Message> =>
+    invoke("send_message", { recipientOnion, content, messageType }),
 
-  async getMessages(contactOnion: string): Promise<Message[]> {
-    return invoke("get_messages", { contactOnion });
-  },
+  sendReplyMessage: (recipientOnion: string, content: string, messageType: string, replyTo: string): Promise<Message> =>
+    invoke("send_reply_message", { recipientOnion, content, messageType, replyTo }),
 
-  async generateQrCode(): Promise<string> {
-    return invoke("generate_qr_code");
-  },
+  getMessages: (contactOnion: string): Promise<Message[]> =>
+    invoke("get_messages", { contactOnion }),
 
-  async scanQrCode(qrData: string): Promise<Contact> {
-    return invoke("scan_qr_code", { qrData });
-  },
+  deleteMessage: (messageId: string): Promise<void> =>
+    invoke("delete_message", { messageId }),
 
-  async getTorStatus(): Promise<TorStatus> {
-    return invoke("get_tor_status");
-  },
+  searchMessages: (query: string): Promise<Message[]> =>
+    invoke("search_messages", { query }),
 
-  async deleteAllData(): Promise<void> {
-    return invoke("delete_all_data");
-  },
+  markMessagesRead: (contactOnion: string): Promise<void> =>
+    invoke("mark_messages_read", { contactOnion }),
 
-  async getEncryptionInfo(): Promise<EncryptionInfo> {
-    return invoke("get_encryption_info");
-  },
+  setDisappearingMessage: (messageId: string, ttlSecs: number): Promise<void> =>
+    invoke("set_disappearing_message", { messageId, ttlSecs }),
+
+  // ── Reactions ───────────────────────────────────────────────────────────
+  addReaction: (messageId: string, emoji: string): Promise<Reaction> =>
+    invoke("add_reaction", { messageId, emoji }),
+
+  removeReaction: (messageId: string, emoji: string): Promise<void> =>
+    invoke("remove_reaction", { messageId, emoji }),
+
+  getReactions: (messageId: string): Promise<Reaction[]> =>
+    invoke("get_reactions", { messageId }),
+
+  // ── Typing ──────────────────────────────────────────────────────────────
+  sendTypingIndicator: (peerOnion: string, isTyping: boolean): Promise<void> =>
+    invoke("send_typing_indicator", { peerOnion, isTyping }),
+
+  getTypingStatus: (peerOnion: string): Promise<TypingStatus> =>
+    invoke("get_typing_status", { peerOnion }),
+
+  // ── Groups ──────────────────────────────────────────────────────────────
+  createGroup: (name: string, description: string): Promise<Group> =>
+    invoke("create_group", { name, description }),
+
+  getGroups: (): Promise<Group[]> =>
+    invoke("get_groups"),
+
+  getGroup: (groupId: string): Promise<Group> =>
+    invoke("get_group", { groupId }),
+
+  addGroupMember: (groupId: string, displayName: string, publicKey: string, onionAddress: string): Promise<GroupMember> =>
+    invoke("add_group_member", { groupId, displayName, publicKey, onionAddress }),
+
+  removeGroupMember: (groupId: string, onionAddress: string): Promise<void> =>
+    invoke("remove_group_member", { groupId, onionAddress }),
+
+  sendGroupMessage: (groupId: string, content: string, messageType: string): Promise<GroupMessage> =>
+    invoke("send_group_message", { groupId, content, messageType }),
+
+  getGroupMessages: (groupId: string): Promise<GroupMessage[]> =>
+    invoke("get_group_messages", { groupId }),
+
+  getGroupMembers: (groupId: string): Promise<GroupMember[]> =>
+    invoke("get_group_members", { groupId }),
+
+  // ── Calls ───────────────────────────────────────────────────────────────
+  startVideoCall: (recipientOnion: string): Promise<string> =>
+    invoke("start_video_call", { recipientOnion }),
+
+  startAudioCall: (recipientOnion: string): Promise<string> =>
+    invoke("start_audio_call", { recipientOnion }),
+
+  answerVideoCall: (callId: string): Promise<void> =>
+    invoke("answer_video_call", { callId }),
+
+  endVideoCall: (callId: string): Promise<void> =>
+    invoke("end_video_call", { callId }),
+
+  startScreenShare: (callId: string): Promise<void> =>
+    invoke("start_screen_share", { callId }),
+
+  stopScreenShare: (callId: string): Promise<void> =>
+    invoke("stop_screen_share", { callId }),
+
+  toggleAudioMute: (callId: string): Promise<void> =>
+    invoke("toggle_audio_mute", { callId }),
+
+  toggleVideo: (callId: string): Promise<void> =>
+    invoke("toggle_video", { callId }),
+
+  getCallHistory: (): Promise<CallLogEntry[]> =>
+    invoke("get_call_history"),
+
+  getActiveCalls: (): Promise<any[]> =>
+    invoke("get_active_calls"),
+
+  // ── Files ───────────────────────────────────────────────────────────────
+  sendFile: (recipientOnion: string, filePath: string): Promise<FileTransfer> =>
+    invoke("send_file", { recipientOnion, filePath }),
+
+  getFileTransfers: (): Promise<FileTransfer[]> =>
+    invoke("get_file_transfers"),
+
+  // ── QR ──────────────────────────────────────────────────────────────────
+  generateQrCode: (): Promise<string> =>
+    invoke("generate_qr_code"),
+
+  scanQrCode: (qrData: string): Promise<Contact> =>
+    invoke("scan_qr_code", { qrData }),
+
+  // ── Tor ─────────────────────────────────────────────────────────────────
+  getTorStatus: (): Promise<TorStatus> =>
+    invoke("get_tor_status"),
+
+  // ── Security ────────────────────────────────────────────────────────────
+  getEncryptionInfo: (): Promise<EncryptionInfo> =>
+    invoke("get_encryption_info"),
+
+  deleteAllData: (): Promise<void> =>
+    invoke("delete_all_data"),
+
+  // ── Settings ────────────────────────────────────────────────────────────
+  getSettings: (): Promise<AppSettings> =>
+    invoke("get_settings"),
+
+  updateSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
+    invoke("update_settings", { settings }),
 };
