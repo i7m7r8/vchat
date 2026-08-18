@@ -6,7 +6,6 @@ class VchatApp {
   private activeCallId: string | null = null;
   private callTimerInterval: any = null;
   private callSeconds = 0;
-  private _currentScreen = "chats";
 
   async init() {
     await this.loadIdentity();
@@ -68,7 +67,6 @@ class VchatApp {
   }
 
   private showScreen(name: string) {
-    this._currentScreen = name;
     const screens = ["chats", "chat", "contacts", "calls", "settings"];
     screens.forEach((s) => {
       const el = document.getElementById(`screen-${s}`);
