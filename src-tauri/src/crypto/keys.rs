@@ -88,7 +88,7 @@ impl X25519KeyPair {
     }
 
     pub fn diffie_hellman(&self, their_public: &x25519_dalek::PublicKey) -> [u8; 32] {
-        self.secret.diffie_hellman(their_public).as_bytes().copied()
+        *self.secret.diffie_hellman(their_public).as_bytes()
     }
 }
 
@@ -96,7 +96,7 @@ pub fn derive_shared_key(
     our_secret: &x25519_dalek::StaticSecret,
     their_public: &x25519_dalek::PublicKey,
 ) -> [u8; 32] {
-    our_secret.diffie_hellman(their_public).as_bytes().copied()
+    *our_secret.diffie_hellman(their_public).as_bytes()
 }
 
 pub fn hkdf_derive(
