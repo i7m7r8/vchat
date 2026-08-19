@@ -450,10 +450,6 @@ pub async fn get_messages(contact_onion: String) -> Result<Vec<Message>, String>
 
     Ok(messages.into_iter().rev().collect())
 }
-        })
-        .collect();
-    Ok(messages)
-}
 
 #[tauri::command]
 pub async fn delete_message(message_id: String) -> Result<(), String> {
