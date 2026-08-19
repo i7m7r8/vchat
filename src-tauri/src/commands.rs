@@ -78,7 +78,7 @@ impl MessageType {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s {
             "file" => Self::File,
             "image" => Self::Image,
@@ -211,6 +211,12 @@ impl VchatState {
     }
 }
 
+impl Default for VchatState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type SharedVchatState = Arc<VchatState>;
 
 pub fn create_app_state() -> SharedVchatState {
@@ -230,8 +236,7 @@ async fn get_identity_onion() -> Result<String, String> {
 }
 
 fn parse_type_str(s: &str) -> MessageType {
-    MessageType::from_str(s)
-}
+    MessageType::from_string(s)}
 
 fn now_ts() -> i64 {
     Utc::now().timestamp()
@@ -354,7 +359,7 @@ pub async fn send_reply_message(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Identity not initialized".to_string())?;
 
-    let signing_key = crypto::load_signing_key()
+    let _signing_key = crypto::load_signing_key()
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Signing key not found".to_string())?;
@@ -441,8 +446,6 @@ pub async fn send_reply_message(
 
 #[tauri::command]
 pub async fn get_messages(contact_onion: String) -> Result<Vec<Message>, String> {
-    let my_onion = get_identity_onion().await.unwrap_or_default();
-
     let messages = store::load_messages(&contact_onion, 500, 0)
         .await
         .map_err(|e| e.to_string())?;
@@ -1116,15 +1119,6 @@ pub async fn delete_all_data() -> Result<(), String> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Settings commands
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const SETTINGS_KEYS: &[&str] = &[
-    "disappearing_messages_default",
-    "default_ttl_secs",
-    "read_receipts",
-    "typing_indicators",
-    "notifications_enabled",
-    "theme",
-];
 
 fn default_settings() -> AppSettings {
     AppSettings {

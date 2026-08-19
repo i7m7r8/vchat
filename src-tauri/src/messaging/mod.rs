@@ -21,7 +21,7 @@ fn message_type_str(mt: &MessageType) -> &'static str {
 }
 
 fn parse_message_type(s: &str) -> MessageType {
-    MessageType::from_str(s)
+    MessageType::from_string(s)
 }
 
 async fn load_identity_or_bail() -> Result<crate::commands::Identity> {

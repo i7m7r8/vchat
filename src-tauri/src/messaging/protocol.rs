@@ -296,7 +296,7 @@ pub fn deserialize_wire_message(data: &[u8]) -> Result<WireMessage> {
         );
     }
 
-    if frame_len > MAX_FRAME_SIZE as usize {
+    if frame_len > MAX_FRAME_SIZE {
         bail!(
             "Frame length {} exceeds MAX_FRAME_SIZE {}",
             frame_len,

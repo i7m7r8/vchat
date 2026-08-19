@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::{Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -453,7 +455,7 @@ pub async fn load_messages(peer: &str, limit: i64, offset: i64) -> Result<Vec<Me
     let messages = stmt
         .query_map(params![peer, identity, limit, offset], |row| {
             let type_str: String = row.get(6)?;
-            let message_type = MessageType::from_str(&type_str);
+            let message_type = MessageType::from_string(&type_str);
             Ok(Message {
                 id: row.get(0)?,
                 sender: row.get(1)?,
@@ -993,7 +995,7 @@ pub async fn search_messages(query: &str, limit: i64) -> Result<Vec<Message>> {
     let messages = stmt
         .query_map(params![pattern, limit], |row| {
             let type_str: String = row.get(6)?;
-            let message_type = MessageType::from_str(&type_str);
+            let message_type = MessageType::from_string(&type_str);
             Ok(Message {
                 id: row.get(0)?,
                 sender: row.get(1)?,

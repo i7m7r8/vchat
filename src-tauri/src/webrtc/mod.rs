@@ -68,6 +68,12 @@ impl WebRTCState {
     }
 }
 
+impl Default for WebRTCState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type SharedWebRTCState = Arc<RwLock<WebRTCState>>;
 
 pub fn create_state() -> SharedWebRTCState {
