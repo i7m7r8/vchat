@@ -117,7 +117,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vchat-macos-universal
-          path: src-tauri/target/release/bundle/**/*
+          path: src-tauri/target/universal-apple-darwin/release/bundle/**/*
           retention-days: 30
 
   build-android:
