@@ -131,7 +131,7 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
     );
 
     let response = match wire_msg.msg_type {
-        WireMessageType::TextMessage => handle_text_message(&wire_msg, &addr).await,
+        WireMessageType::Text => handle_text_message(&wire_msg, &addr).await,
         WireMessageType::CallInvite => handle_call_invite(&wire_msg, &addr).await,
         WireMessageType::CallAccept => handle_call_accept(&wire_msg, &addr).await,
         WireMessageType::CallReject => handle_call_reject(&wire_msg, &addr).await,
@@ -251,6 +251,7 @@ async fn handle_heartbeat(msg: &WireMessage, addr: &std::net::SocketAddr) -> any
     );
 
     let heartbeat_response = HeartbeatPayload {
+        relay_hint: None,
         uptime_secs: 0,
         active_sessions: 1,
     };
@@ -262,10 +263,11 @@ async fn handle_heartbeat(msg: &WireMessage, addr: &std::net::SocketAddr) -> any
 
     let seq = msg.sequence + 1;
     let response = crate::messaging::protocol::create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
         WireMessageType::Heartbeat,
         payload_bytes,
-        &signing_key.public_key_bytes(),
-        &signing_key.signing_key(),
+        uuid::Uuid::new_v4().to_string(),
         seq,
     )?;
 
@@ -312,21 +314,17 @@ fn build_ack_response(msg: &WireMessage) -> anyhow::Result<Vec<u8>> {
     });
     let payload_bytes = serde_json::to_vec(&ack_payload)?;
 
-    let sender_pubkey_bytes: [u8; 32] = msg
-        .sender_pubkey
-        .clone()
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("Invalid sender pubkey length"))?;
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&rand::random::<[u8; 32]>());
+    let verifying_key = signing_key.verifying_key();
 
     let seq = msg.sequence + 1;
 
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(&rand::random::<[u8; 32]>());
-
     let response = crate::messaging::protocol::create_wire_message(
+        &signing_key,
+        &verifying_key,
         WireMessageType::Ack,
         payload_bytes,
-        &sender_pubkey_bytes,
-        &signing_key,
+        uuid::Uuid::new_v4().to_string(),
         seq,
     )?;
 

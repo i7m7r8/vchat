@@ -160,11 +160,12 @@ pub async fn send_message(
     let payload_bytes = payload_to_json(&text_payload)?;
 
     let wire_msg = create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::Text,
         payload_bytes,
         msg_id.clone(),
+        seq,
     )?;
     let wire_bytes = serialize_wire_message(&wire_msg)?;
 
@@ -302,11 +303,12 @@ pub async fn send_reaction(message_id: &str, emoji: &str) -> Result<Reaction> {
         let payload_bytes = payload_to_json(&reaction_payload)?;
 
         match create_wire_message(
-            signing_key.signing_key(),
+            &signing_key.signing_key(),
             &signing_key.verifying_key,
             WireMessageType::Reaction,
             payload_bytes,
             reaction_id,
+            0,
         ) {
             Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
                 Ok(wire_bytes) => try_send_wire(&peer_onion, &wire_bytes).await,
@@ -384,11 +386,12 @@ pub async fn send_delivery_receipt(peer_onion: &str, message_ids: &[String]) -> 
     let payload_bytes = payload_to_json(&payload)?;
 
     let wire_msg = create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::DeliveryReceipt,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
+        0,
     )?;
     let wire_bytes = serialize_wire_message(&wire_msg)?;
 
@@ -405,11 +408,12 @@ pub async fn send_read_receipt(peer_onion: &str, message_ids: &[String]) -> Resu
     let payload_bytes = payload_to_json(&payload)?;
 
     let wire_msg = create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::ReadReceipt,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
+        0,
     )?;
     let wire_bytes = serialize_wire_message(&wire_msg)?;
 
@@ -429,11 +433,12 @@ pub async fn send_typing_indicator(peer_onion: &str, is_typing: bool) -> Result<
     let payload_bytes = payload_to_json(&payload)?;
 
     let wire_msg = create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::TypingIndicator,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
+        0,
     )?;
     let wire_bytes = serialize_wire_message(&wire_msg)?;
 
@@ -541,11 +546,12 @@ pub async fn create_group(
                 let payload_bytes = payload_to_json(&create_payload)?;
 
                 match create_wire_message(
-                    signing_key.signing_key(),
+                    &signing_key.signing_key(),
                     &signing_key.verifying_key,
                     WireMessageType::GroupCreate,
                     payload_bytes,
                     uuid::Uuid::new_v4().to_string(),
+                    0,
                 ) {
                     Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
                         Ok(wire_bytes) => {
@@ -651,11 +657,12 @@ pub async fn send_group_message(
         }
 
         match create_wire_message(
-            signing_key.signing_key(),
+            &signing_key.signing_key(),
             &signing_key.verifying_key,
             WireMessageType::GroupMessage,
             payload_bytes.clone(),
             uuid::Uuid::new_v4().to_string(),
+            0,
         ) {
             Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
                 Ok(wire_bytes) => try_send_wire(member_onion, &wire_bytes).await,
@@ -711,11 +718,12 @@ pub async fn add_group_member(
     let payload_bytes = payload_to_json(&update_payload)?;
 
     match create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::GroupUpdate,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
+        0,
     ) {
         Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
             Ok(wire_bytes) => try_send_wire(onion_address, &wire_bytes).await,
@@ -748,11 +756,12 @@ pub async fn remove_group_member(group_id: &str, onion_address: &str) -> Result<
     let payload_bytes = payload_to_json(&update_payload)?;
 
     match create_wire_message(
-        signing_key.signing_key(),
+        &signing_key.signing_key(),
         &signing_key.verifying_key,
         WireMessageType::GroupUpdate,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
+        0,
     ) {
         Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
             Ok(wire_bytes) => try_send_wire(onion_address, &wire_bytes).await,

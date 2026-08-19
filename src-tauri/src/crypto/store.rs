@@ -3,7 +3,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use once_cell::Lazy;
+use once_cell::sync::Lazy;
 
 use crate::commands::{Contact, Identity, Message, MessageType};
 

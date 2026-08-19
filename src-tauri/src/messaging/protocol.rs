@@ -29,6 +29,7 @@ pub enum WireMessageType {
     DeliveryReceipt,
     ProfileUpdate,
     GroupUpdate,
+    Ack,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +40,7 @@ pub struct WireMessage {
     pub signature: Vec<u8>,
     pub sender_pubkey: Vec<u8>,
     pub timestamp: i64,
+    pub sequence: u64,
     pub nonce: Vec<u8>,
     pub message_id: String,
 }
@@ -49,7 +51,7 @@ pub enum CallType {
     Video,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TextPayload {
     pub content: String,
     pub reply_to: Option<String>,
@@ -82,9 +84,11 @@ pub struct CallInvitePayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatPayload {
     pub relay_hint: Option<String>,
+    pub uptime_secs: u64,
+    pub active_sessions: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReactionPayload {
     pub message_id: String,
     pub emoji: String,
@@ -130,7 +134,7 @@ pub struct GroupAckPayload {
     pub message_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DisappearingPayload {
     pub message_id: String,
     pub ttl_secs: u64,
@@ -180,6 +184,7 @@ pub fn create_wire_message(
     msg_type: WireMessageType,
     payload_bytes: Vec<u8>,
     message_id: String,
+    sequence: u64,
 ) -> Result<WireMessage> {
     let timestamp = Utc::now().timestamp();
     let nonce: Vec<u8> = (0..32).map(|_| rand::random::<u8>()).collect();
@@ -190,6 +195,7 @@ pub fn create_wire_message(
     signing_input.extend_from_slice(&(payload_bytes.len() as u32).to_le_bytes());
     signing_input.extend_from_slice(&payload_bytes);
     signing_input.extend_from_slice(&timestamp.to_le_bytes());
+    signing_input.extend_from_slice(&sequence.to_le_bytes());
     signing_input.extend_from_slice(&nonce);
     signing_input.extend_from_slice(message_id.as_bytes());
 
@@ -203,6 +209,7 @@ pub fn create_wire_message(
         signature: signature_bytes,
         sender_pubkey: verifying_key.to_bytes().to_vec(),
         timestamp,
+        sequence,
         nonce,
         message_id,
     })
@@ -231,6 +238,7 @@ pub fn verify_wire_message(message: &WireMessage, verifying_key: &VerifyingKey) 
     signing_input.extend_from_slice(&(message.payload.len() as u32).to_le_bytes());
     signing_input.extend_from_slice(&message.payload);
     signing_input.extend_from_slice(&message.timestamp.to_le_bytes());
+    signing_input.extend_from_slice(&message.sequence.to_le_bytes());
     signing_input.extend_from_slice(&message.nonce);
     signing_input.extend_from_slice(message.message_id.as_bytes());
 
@@ -339,6 +347,7 @@ mod tests {
             WireMessageType::Text,
             payload_to_json(&text).unwrap(),
             "test-msg-001".to_string(),
+            0,
         )
         .unwrap();
 

@@ -3,7 +3,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use tokio::sync::RwLock;
 
 use crate::crypto;
 use crate::crypto::store;
@@ -1127,45 +1126,49 @@ const SETTINGS_KEYS: &[&str] = &[
     "theme",
 ];
 
-const DEFAULT_SETTINGS: AppSettings = AppSettings {
-    disappearing_messages_default: false,
-    default_ttl_secs: 3600,
-    read_receipts: true,
-    typing_indicators: true,
-    notifications_enabled: true,
-    theme: "dark".to_string(),
-};
+fn default_settings() -> AppSettings {
+    AppSettings {
+        disappearing_messages_default: false,
+        default_ttl_secs: 3600,
+        read_receipts: true,
+        typing_indicators: true,
+        notifications_enabled: true,
+        theme: "dark".to_string(),
+    }
+}
 
 #[tauri::command]
 pub async fn get_settings() -> Result<AppSettings, String> {
-    let get = |key: &str| async {
-        store::get_setting(key)
+    let get = |key: String| async move {
+        store::get_setting(&key)
             .await
             .map_err(|e| e.to_string())
     };
 
-    let disappearing = get("disappearing_messages_default").await?
-        .map(|v| v == "true")
-        .unwrap_or(DEFAULT_SETTINGS.disappearing_messages_default);
+    let defaults = default_settings();
 
-    let ttl = get("default_ttl_secs").await?
+    let disappearing = get("disappearing_messages_default".to_string()).await?
+        .map(|v| v == "true")
+        .unwrap_or(defaults.disappearing_messages_default);
+
+    let ttl = get("default_ttl_secs".to_string()).await?
         .and_then(|v| v.parse().ok())
-        .unwrap_or(DEFAULT_SETTINGS.default_ttl_secs);
+        .unwrap_or(defaults.default_ttl_secs);
 
-    let read_receipts = get("read_receipts").await?
+    let read_receipts = get("read_receipts".to_string()).await?
         .map(|v| v == "true")
-        .unwrap_or(DEFAULT_SETTINGS.read_receipts);
+        .unwrap_or(defaults.read_receipts);
 
-    let typing = get("typing_indicators").await?
+    let typing = get("typing_indicators".to_string()).await?
         .map(|v| v == "true")
-        .unwrap_or(DEFAULT_SETTINGS.typing_indicators);
+        .unwrap_or(defaults.typing_indicators);
 
-    let notifications = get("notifications_enabled").await?
+    let notifications = get("notifications_enabled".to_string()).await?
         .map(|v| v == "true")
-        .unwrap_or(DEFAULT_SETTINGS.notifications_enabled);
+        .unwrap_or(defaults.notifications_enabled);
 
-    let theme = get("theme").await?
-        .unwrap_or_else(|| DEFAULT_SETTINGS.theme.clone());
+    let theme = get("theme".to_string()).await?
+        .unwrap_or(defaults.theme);
 
     Ok(AppSettings {
         disappearing_messages_default: disappearing,
@@ -1182,31 +1185,31 @@ pub async fn update_settings(settings_json: String) -> Result<AppSettings, Strin
     let settings: AppSettings = serde_json::from_str(&settings_json)
         .map_err(|e| format!("Invalid settings JSON: {e}"))?;
 
-    let set = |key: &str, val: &str| async {
-        store::set_setting(key, val)
+    let set = |key: String, val: String| async move {
+        store::set_setting(&key, &val)
             .await
             .map_err(|e| e.to_string())
     };
 
     set(
-        "disappearing_messages_default",
-        &settings.disappearing_messages_default.to_string(),
+        "disappearing_messages_default".to_string(),
+        settings.disappearing_messages_default.to_string(),
     )
     .await?;
 
-    set("default_ttl_secs", &settings.default_ttl_secs.to_string()).await?;
+    set("default_ttl_secs".to_string(), settings.default_ttl_secs.to_string()).await?;
 
-    set("read_receipts", &settings.read_receipts.to_string()).await?;
+    set("read_receipts".to_string(), settings.read_receipts.to_string()).await?;
 
-    set("typing_indicators", &settings.typing_indicators.to_string()).await?;
+    set("typing_indicators".to_string(), settings.typing_indicators.to_string()).await?;
 
     set(
-        "notifications_enabled",
-        &settings.notifications_enabled.to_string(),
+        "notifications_enabled".to_string(),
+        settings.notifications_enabled.to_string(),
     )
     .await?;
 
-    set("theme", &settings.theme).await?;
+    set("theme".to_string(), settings.theme.clone()).await?;
 
     crate::error::audit_log("settings_updated", &settings_json);
 
