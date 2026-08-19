@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
@@ -344,9 +344,9 @@ pub async fn verify_contact(onion_address: &str) -> Result<()> {
 }
 
 pub async fn mark_messages_read_for_peer(peer_onion: &str) -> Result<()> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let db = DB.lock().await;
     let conn = db.as_ref().context("Database not initialized")?;
-    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     conn.execute(
         "UPDATE messages SET read = 1 WHERE sender = ?1 AND recipient = ?2 AND read = 0",
         params![peer_onion, identity],
@@ -440,6 +440,7 @@ pub async fn save_message_with_encrypted(
 }
 
 pub async fn load_messages(peer: &str, limit: i64, offset: i64) -> Result<Vec<Message>> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let db = DB.lock().await;
     let conn = db.as_ref().context("Database not initialized")?;
     let mut stmt = conn.prepare(
@@ -449,7 +450,6 @@ pub async fn load_messages(peer: &str, limit: i64, offset: i64) -> Result<Vec<Me
          ORDER BY timestamp ASC
          LIMIT ?3 OFFSET ?4",
     )?;
-    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let messages = stmt
         .query_map(params![peer, identity, limit, offset], |row| {
             let type_str: String = row.get(6)?;
@@ -475,9 +475,9 @@ pub async fn load_messages(peer: &str, limit: i64, offset: i64) -> Result<Vec<Me
 }
 
 pub async fn get_message_count(peer: &str) -> Result<i64> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let db = DB.lock().await;
     let conn = db.as_ref().context("Database not initialized")?;
-    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM messages WHERE (sender = ?1 AND recipient = ?2) OR (sender = ?2 AND recipient = ?1)",
         params![peer, identity],
@@ -537,6 +537,7 @@ pub async fn delete_all_data() -> Result<()> {
          DELETE FROM identity;",
     )
     .context("Failed to delete all data")?;
+    drop(db);
     log_audit_event("data_deleted", Some("All data wiped")).await?;
     Ok(())
 }
@@ -845,9 +846,9 @@ pub async fn load_file_transfers(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<(String, String, String, String, Option<String>, Option<i64>, Option<Vec<u8>>, Option<String>, String, i64, Option<i64>)>> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let db = DB.lock().await;
     let conn = db.as_ref().context("Database not initialized")?;
-    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
     let (sql, params_vec): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = match peer {
         Some(p) => (
             "SELECT id, sender, recipient, filename, mime_type, size, encryption_key, chunk_dir, status, started_at, completed_at

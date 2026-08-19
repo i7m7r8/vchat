@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
-use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 pub const WIRE_VERSION: u8 = 1;

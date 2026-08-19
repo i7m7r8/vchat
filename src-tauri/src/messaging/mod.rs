@@ -165,7 +165,7 @@ pub async fn send_message(
         WireMessageType::Text,
         payload_bytes,
         msg_id.clone(),
-        seq,
+        seq as u64,
     )?;
     let wire_bytes = serialize_wire_message(&wire_msg)?;
 

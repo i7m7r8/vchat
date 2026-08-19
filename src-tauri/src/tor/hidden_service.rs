@@ -87,7 +87,7 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
 
     let mut len_buf = [0u8; 4];
     match stream.read_exact(&mut len_buf).await {
-        Ok(()) => {}
+        Ok(_) => {}
         Err(e) => {
             warn!("Failed to read message length from {addr}: {e}");
             return;
@@ -105,7 +105,7 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
 
     let mut msg_buf = vec![0u8; msg_len];
     match stream.read_exact(&mut msg_buf).await {
-        Ok(()) => {}
+        Ok(_) => {}
         Err(e) => {
             warn!("Failed to read message payload from {addr}: {e}");
             return;
