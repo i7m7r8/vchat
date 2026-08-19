@@ -1,4 +1,4 @@
-import { api, Contact, Message, Identity, Group, GroupMessage, Reaction, TypingStatus, CallLogEntry, AppSettings } from "./lib/api";
+import { api, Contact, Message, Identity, Group, GroupMessage, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
 import { store } from "./lib/store";
 
 class VchatApp {
@@ -17,6 +17,7 @@ class VchatApp {
       await this.loadIdentity();
       await this.loadContacts();
       await this.loadGroups();
+      await this.loadCallHistory();
       await this.updateTorStatus();
       this.setupNavigation();
       this.setupChatView();
@@ -42,12 +43,16 @@ class VchatApp {
 
   async loadIdentity(): Promise<void> {
     try {
-      let identity: Identity | null = await api.getIdentity();
-      if (!identity) {
-        identity = await api.createIdentity();
+      let identity: Identity | null = null;
+      try {
+        identity = await api.getIdentity();
+      } catch {
+        identity = await api.initIdentity("User");
       }
-      store.identity = identity;
-      this.updateSettingsProfile(identity);
+      if (identity) {
+        store.setIdentity(identity);
+        this.updateSettingsProfile(identity);
+      }
     } catch (err) {
       console.error("Failed to load identity:", err);
     }
@@ -70,8 +75,9 @@ class VchatApp {
       const status = await api.getTorStatus();
       const badge = document.getElementById("tor-status-badge");
       if (badge) {
-        badge.className = `tor-badge tor-${status}`;
-        badge.textContent = status === "connected" ? "Tor Connected" : status === "connecting" ? "Connecting..." : "Tor Offline";
+        const connected = status.connected;
+        badge.className = `tor-badge tor-${connected ? "connected" : "disconnected"}`;
+        badge.textContent = connected ? "Tor Connected" : "Tor Offline";
       }
     } catch (err) {
       console.error("Tor status check failed:", err);
@@ -81,7 +87,7 @@ class VchatApp {
   async loadContacts(): Promise<void> {
     try {
       const contacts = await api.getContacts();
-      store.contacts = contacts;
+      store.setContacts(contacts);
       this.renderChatList(contacts);
       this.renderContacts(contacts);
     } catch (err) {
@@ -92,10 +98,20 @@ class VchatApp {
   async loadGroups(): Promise<void> {
     try {
       const groups = await api.getGroups();
-      store.groups = groups;
+      store.setGroups(groups);
       this.renderGroupsList(groups);
     } catch (err) {
       console.error("Failed to load groups:", err);
+    }
+  }
+
+  async loadCallHistory(): Promise<void> {
+    try {
+      const calls = await api.getCallHistory();
+      store.setCallHistory(calls);
+      this.renderCallHistory(calls);
+    } catch (err) {
+      console.error("Failed to load call history:", err);
     }
   }
 
@@ -156,10 +172,11 @@ class VchatApp {
 
     container.innerHTML = contacts
       .map((c) => {
-        const lastMsg = store.lastMessages[c.onion_address];
-        const preview = lastMsg ? this.esc(lastMsg.text || "Attachment") : "No messages yet";
+        const msgs = store.getMessagesForContact(c.onion_address);
+        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const preview = lastMsg ? this.esc(lastMsg.content || "Attachment") : "No messages yet";
         const time = lastMsg ? this.formatDate(lastMsg.timestamp) : "";
-        const unread = store.unreadCounts[c.onion_address] || 0;
+        const unread = msgs.filter((m) => m.sender === c.onion_address && !m.read).length;
         return `
         <div class="chat-list-item" data-onion="${this.esc(c.onion_address)}">
           <div class="avatar ${this.avatarColor(c.display_name)}">${c.display_name.charAt(0).toUpperCase()}</div>
@@ -243,7 +260,7 @@ class VchatApp {
         <div class="avatar avatar-group">${g.name.charAt(0).toUpperCase()}</div>
         <div class="group-list-info">
           <span class="group-list-name">${this.esc(g.name)}</span>
-          <span class="group-list-members">${g.members.length} member${g.members.length !== 1 ? "s" : ""}</span>
+          <span class="group-list-members">${g.member_count} member${g.member_count !== 1 ? "s" : ""}</span>
         </div>
       </div>`
       )
@@ -273,17 +290,17 @@ class VchatApp {
 
     container.innerHTML = calls
       .map((call) => {
-        const dirIcon = call.direction === "outgoing" ? "↗" : call.direction === "missed" ? "✕" : "↙";
+        const dirIcon = call.direction === "outgoing" ? "↗" : call.status === "missed" ? "✕" : "↙";
         const typeIcon = call.call_type === "video" ? "📹" : "📞";
         return `
         <div class="call-history-item" data-call-id="${this.esc(call.id)}">
-          <div class="call-icon ${call.direction === "missed" ? "missed" : ""}">${dirIcon}</div>
+          <div class="call-icon ${call.status === "missed" ? "missed" : ""}">${dirIcon}</div>
           <div class="call-type-icon">${typeIcon}</div>
           <div class="call-info">
-            <span class="call-name">${this.esc(call.contact_name || call.contact_onion)}</span>
-            <span class="call-date">${this.formatDate(call.timestamp)}</span>
+            <span class="call-name">${this.esc(call.peer_onion)}</span>
+            <span class="call-date">${this.formatDate(call.started_at)}</span>
           </div>
-          <span class="call-duration">${call.duration ? this.formatDuration(call.duration) : ""}</span>
+          <span class="call-duration">${call.duration_secs ? this.formatDuration(call.duration_secs) : ""}</span>
         </div>`;
       })
       .join("");
@@ -301,7 +318,7 @@ class VchatApp {
         if (filter === "all") {
           (item as HTMLElement).style.display = "";
         } else if (filter === "missed") {
-          (item as HTMLElement).style.display = call.direction === "missed" ? "" : "none";
+          (item as HTMLElement).style.display = call.status === "missed" ? "" : "none";
         } else if (filter === "outgoing") {
           (item as HTMLElement).style.display = call.direction === "outgoing" ? "" : "none";
         }
@@ -338,7 +355,7 @@ class VchatApp {
     const headerName = document.getElementById("group-chat-header-name");
     const headerInfo = document.getElementById("group-chat-header-info");
     if (headerName) headerName.textContent = group.name;
-    if (headerInfo) headerInfo.textContent = `${group.members.length} members`;
+    if (headerInfo) headerInfo.textContent = `${group.member_count} members`;
 
     this.showScreen("group-chat");
     await this.loadGroupMessages(group.id);
@@ -439,7 +456,7 @@ class VchatApp {
   async loadMessages(contactOnion: string): Promise<void> {
     try {
       const messages = await api.getMessages(contactOnion);
-      store.messages[contactOnion] = messages;
+      store.setMessagesForContact(contactOnion, messages);
       this.renderMessages(messages);
       this.setupReplyPreview();
     } catch (err) {
@@ -451,7 +468,7 @@ class VchatApp {
   async loadGroupMessages(groupId: string): Promise<void> {
     try {
       const messages = await api.getGroupMessages(groupId);
-      store.groupMessages[groupId] = messages;
+      store.setGroupMessagesForGroup(groupId, messages);
       this.renderGroupMessages(messages);
     } catch (err) {
       console.error("Failed to load group messages:", err);
@@ -473,6 +490,7 @@ class VchatApp {
       return;
     }
 
+    const identity = store.getIdentity();
     let html = "";
     let lastDate = "";
 
@@ -483,11 +501,11 @@ class VchatApp {
         lastDate = dateStr;
       }
 
-      const isSent = msg.direction === "sent";
+      const isSent = msg.sender === identity?.onion_address;
       const statusIcon = isSent
-        ? msg.status === "read"
+        ? msg.read
           ? '<span class="msg-status msg-read">✓✓</span>'
-          : msg.status === "delivered"
+          : msg.delivered
           ? '<span class="msg-status msg-delivered">✓✓</span>'
           : '<span class="msg-status msg-sent">✓</span>'
         : "";
@@ -497,16 +515,18 @@ class VchatApp {
 
       let replyPreview = "";
       if (msg.reply_to) {
+        const replyMsg = messages.find((m) => m.id === msg.reply_to);
         replyPreview = `
           <div class="reply-preview">
-            <div class="reply-preview-text">${this.esc(msg.reply_to.text || "Attachment")}</div>
+            <div class="reply-preview-text">${replyMsg ? this.esc(replyMsg.content || "Attachment") : "Message"}</div>
           </div>`;
       }
 
       let reactionsHtml = "";
-      if (msg.reactions && msg.reactions.length > 0) {
+      const reactionsForMsg = store.getReactionsForMessage(msg.id);
+      if (reactionsForMsg.length > 0) {
         const reactionMap = new Map<string, number>();
-        msg.reactions.forEach((r: Reaction) => {
+        reactionsForMsg.forEach((r: Reaction) => {
           reactionMap.set(r.emoji, (reactionMap.get(r.emoji) || 0) + 1);
         });
         const items = Array.from(reactionMap.entries())
@@ -515,9 +535,9 @@ class VchatApp {
         reactionsHtml = `<div class="message-reactions">${items}</div>`;
       }
 
-      const bodyHtml = msg.text ? `<div class="msg-text">${this.esc(msg.text)}</div>` : "";
-      const attachmentHtml = msg.file_path
-        ? `<div class="msg-attachment">📎 ${this.esc(msg.file_name || "File")}</div>`
+      const bodyHtml = msg.content ? `<div class="msg-text">${this.esc(msg.content)}</div>` : "";
+      const attachmentHtml = msg.message_type === "file" || msg.message_type === "image"
+        ? `<div class="msg-attachment">📎 ${this.esc(msg.content || "File")}</div>`
         : "";
 
       html += `
@@ -578,6 +598,7 @@ class VchatApp {
       return;
     }
 
+    const identity = store.getIdentity();
     let html = "";
     let lastDate = "";
 
@@ -588,21 +609,18 @@ class VchatApp {
         lastDate = dateStr;
       }
 
-      const isSent = msg.sender_onion === store.identity?.onion_address;
-      const senderName = isSent ? "You" : this.esc(msg.sender_name || msg.sender_onion.slice(0, 12));
+      const isSent = msg.sender === identity?.onion_address;
+      const senderName = isSent ? "You" : this.esc(msg.sender.slice(0, 12));
 
       let replyPreview = "";
       if (msg.reply_to) {
         replyPreview = `
           <div class="reply-preview">
-            <div class="reply-preview-text">${this.esc(msg.reply_to.text || "Attachment")}</div>
+            <div class="reply-preview-text">Reply</div>
           </div>`;
       }
 
-      const bodyHtml = msg.text ? `<div class="msg-text">${this.esc(msg.text)}</div>` : "";
-      const attachmentHtml = msg.file_path
-        ? `<div class="msg-attachment">📎 ${this.esc(msg.file_name || "File")}</div>`
-        : "";
+      const bodyHtml = msg.content ? `<div class="msg-text">${this.esc(msg.content)}</div>` : "";
 
       html += `
         <div class="message ${isSent ? "sent" : "received"}" data-msg-id="${this.esc(msg.id)}">
@@ -610,7 +628,6 @@ class VchatApp {
           ${replyPreview}
           <div class="msg-bubble">
             ${bodyHtml}
-            ${attachmentHtml}
             <div class="msg-footer">
               <span class="msg-lock">🔒</span>
               <span class="msg-time">${this.formatTime(msg.timestamp)}</span>
@@ -629,13 +646,14 @@ class VchatApp {
     if (!text && !this.replyToMessage) return;
 
     try {
-      const msg = await api.sendMessage(this.currentContact.onion_address, text || "", this.replyToMessage?.id);
-      if (!store.messages[this.currentContact.onion_address]) {
-        store.messages[this.currentContact.onion_address] = [];
+      let msg: Message;
+      if (this.replyToMessage) {
+        msg = await api.sendReplyMessage(this.currentContact.onion_address, text || "", "text", this.replyToMessage.id);
+      } else {
+        msg = await api.sendMessage(this.currentContact.onion_address, text || "", "text");
       }
-      store.messages[this.currentContact.onion_address].push(msg);
-      store.lastMessages[this.currentContact.onion_address] = msg;
-      this.renderMessages(store.messages[this.currentContact.onion_address]);
+      store.addMessage(this.currentContact.onion_address, msg);
+      this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
       if (input) {
         input.value = "";
         input.style.height = "auto";
@@ -656,12 +674,9 @@ class VchatApp {
     if (!text) return;
 
     try {
-      const msg = await api.sendGroupMessage(this.currentGroup.id, text);
-      if (!store.groupMessages[this.currentGroup.id]) {
-        store.groupMessages[this.currentGroup.id] = [];
-      }
-      store.groupMessages[this.currentGroup.id].push(msg);
-      this.renderGroupMessages(store.groupMessages[this.currentGroup.id]);
+      const msg = await api.sendGroupMessage(this.currentGroup.id, text, "text");
+      store.addGroupMessage(this.currentGroup.id, msg);
+      this.renderGroupMessages(store.getGroupMessagesForGroup(this.currentGroup.id));
       if (input) {
         input.value = "";
         input.style.height = "auto";
@@ -692,7 +707,7 @@ class VchatApp {
         return;
       }
       try {
-        await api.addContact(name, onion);
+        await api.addContact(name, "", onion);
         await this.loadContacts();
         this.hideModal("add-contact-modal");
         if (nameInput) nameInput.value = "";
@@ -707,9 +722,10 @@ class VchatApp {
     document.getElementById("qr-code-open")?.addEventListener("click", async () => {
       this.showModal("qr-code-modal");
       const qrImg = document.getElementById("qr-code-image") as HTMLImageElement | null;
-      if (qrImg && store.identity) {
+      const identity = store.getIdentity();
+      if (qrImg && identity) {
         try {
-          const dataUrl = await api.generateQR(store.identity.onion_address);
+          const dataUrl = await api.generateQrCode();
           qrImg.src = dataUrl;
         } catch (err) {
           console.error("Failed to generate QR:", err);
@@ -722,36 +738,17 @@ class VchatApp {
     });
 
     document.getElementById("qr-scan-camera")?.addEventListener("click", async () => {
-      try {
-        const result = await api.scanQRFromCamera();
-        if (result) {
-          this.hideModal("qr-code-modal");
-          const onionInput = document.getElementById("add-contact-onion") as HTMLInputElement | null;
-          if (onionInput) onionInput.value = result;
-          this.showModal("add-contact-modal");
-        }
-      } catch (err) {
-        this.showToast("QR scan failed");
-      }
+      this.showToast("Camera QR scan coming soon");
     });
 
     document.getElementById("qr-scan-file")?.addEventListener("click", async () => {
-      try {
-        const result = await api.scanQRFromFile();
-        if (result) {
-          this.hideModal("qr-code-modal");
-          const onionInput = document.getElementById("add-contact-onion") as HTMLInputElement | null;
-          if (onionInput) onionInput.value = result;
-          this.showModal("add-contact-modal");
-        }
-      } catch (err) {
-        this.showToast("QR scan failed");
-      }
+      this.showToast("File QR scan coming soon");
     });
 
     document.getElementById("edit-name-open")?.addEventListener("click", () => {
       const input = document.getElementById("edit-name-input") as HTMLInputElement | null;
-      if (input && store.identity) input.value = store.identity.display_name;
+      const identity = store.getIdentity();
+      if (input && identity) input.value = identity.display_name;
       this.showModal("edit-name-modal");
     });
 
@@ -767,7 +764,7 @@ class VchatApp {
         return;
       }
       try {
-        await api.updateIdentity(name);
+        await api.initIdentity(name);
         await this.loadIdentity();
         this.hideModal("edit-name-modal");
         this.showToast("Name updated");
@@ -792,7 +789,7 @@ class VchatApp {
         return;
       }
       try {
-        await api.createGroup(name, []);
+        await api.createGroup(name, name);
         await this.loadGroups();
         this.hideModal("create-group-modal");
         if (nameInput) nameInput.value = "";
@@ -815,7 +812,8 @@ class VchatApp {
       const onion = input?.value.trim();
       if (!onion || !this.currentGroup) return;
       try {
-        await api.addGroupMember(this.currentGroup.id, onion);
+        const identity = store.getIdentity();
+        await api.addGroupMember(this.currentGroup.id, identity?.display_name || "Member", "", onion);
         await this.loadGroups();
         if (input) input.value = "";
         this.showToast("Member added");
@@ -828,6 +826,7 @@ class VchatApp {
       try {
         await api.deleteAllData();
         this.hideModal("delete-data-modal");
+        store.clearAll();
         this.showToast("All data deleted");
         window.location.reload();
       } catch (err) {
@@ -877,13 +876,12 @@ class VchatApp {
     document.getElementById("call-mute-btn")?.addEventListener("click", () => {
       const btn = document.getElementById("call-mute-btn");
       btn?.classList.toggle("active");
-      api.toggleMute();
+      if (this.activeCallId) api.toggleAudioMute(this.activeCallId);
     });
 
     document.getElementById("call-speaker-btn")?.addEventListener("click", () => {
       const btn = document.getElementById("call-speaker-btn");
       btn?.classList.toggle("active");
-      api.toggleSpeaker();
     });
 
     document.getElementById("call-end-btn")?.addEventListener("click", () => {
@@ -891,13 +889,15 @@ class VchatApp {
     });
 
     document.getElementById("call-video-btn")?.addEventListener("click", () => {
-      api.toggleVideo();
+      if (this.activeCallId) api.toggleVideo(this.activeCallId);
       const btn = document.getElementById("call-video-btn");
       btn?.classList.toggle("active");
     });
 
     document.getElementById("call-screen-btn")?.addEventListener("click", () => {
-      api.toggleScreenShare();
+      if (this.activeCallId) {
+        api.startScreenShare(this.activeCallId);
+      }
       const btn = document.getElementById("call-screen-btn");
       btn?.classList.toggle("active");
     });
@@ -906,7 +906,9 @@ class VchatApp {
   async startCall(video: boolean): Promise<void> {
     if (!this.currentContact) return;
     try {
-      const callId = await api.startCall(this.currentContact.onion_address, video);
+      const callId = video
+        ? await api.startVideoCall(this.currentContact.onion_address)
+        : await api.startAudioCall(this.currentContact.onion_address);
       this.activeCallId = callId;
       this.callSeconds = 0;
 
@@ -933,7 +935,7 @@ class VchatApp {
   async endCall(): Promise<void> {
     if (this.activeCallId) {
       try {
-        await api.endCall(this.activeCallId);
+        await api.endVideoCall(this.activeCallId);
       } catch (err) {
         console.error("Failed to end call:", err);
       }
@@ -946,6 +948,8 @@ class VchatApp {
 
     const overlay = document.getElementById("call-overlay");
     overlay?.classList.add("hidden");
+
+    await this.loadCallHistory();
   }
 
   setupContextMenu(): void {
@@ -960,9 +964,9 @@ class VchatApp {
     });
 
     document.getElementById("ctx-copy")?.addEventListener("click", async () => {
-      if (this.contextMenuTarget?.text) {
+      if (this.contextMenuTarget?.content) {
         try {
-          await navigator.clipboard.writeText(this.contextMenuTarget.text);
+          await navigator.clipboard.writeText(this.contextMenuTarget.content);
           this.showToast("Copied to clipboard");
         } catch {
           this.showToast("Failed to copy");
@@ -975,9 +979,8 @@ class VchatApp {
       if (this.contextMenuTarget && this.currentContact) {
         try {
           await api.deleteMessage(this.contextMenuTarget.id);
-          const msgs = store.messages[this.currentContact.onion_address] || [];
-          store.messages[this.currentContact.onion_address] = msgs.filter((m) => m.id !== this.contextMenuTarget!.id);
-          this.renderMessages(store.messages[this.currentContact.onion_address]);
+          store.removeMessage(this.contextMenuTarget.id);
+          this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
           this.showToast("Message deleted");
         } catch (err) {
           this.showToast("Failed to delete message");
@@ -1029,7 +1032,7 @@ class VchatApp {
       "😀","😂","😍","🥰","😊","😎","🤔","😢","😡","👍",
       "👎","❤️","🔥","🎉","👋","🙏","💪","🤝","👏","💯",
       "✅","❌","⭐","🌟","💡","🔒","📱","💻","🎵","🌈",
-      "☀️","🌙","⭐","🌸","🍕","🍔","☕","🎂","🎮","⚽",
+      "☀️","🌙","🌸","🍕","🍔","☕","🎂","🎮","⚽",
       "🏀","🎯","📚","✈️","🚗","🏠","🔑","💰","📞","📧"
     ];
 
@@ -1078,8 +1081,6 @@ class VchatApp {
 
       if (this.currentContact) {
         await api.sendFile(this.currentContact.onion_address, filePath);
-      } else if (this.currentGroup) {
-        await api.sendGroupFile(this.currentGroup.id, filePath);
       }
       this.showToast("File sent");
       if (progressEl) progressEl.classList.add("hidden");
@@ -1093,7 +1094,8 @@ class VchatApp {
     const chatSearch = document.getElementById("chats-search-input") as HTMLInputElement | null;
     chatSearch?.addEventListener("input", () => {
       const query = chatSearch.value.toLowerCase();
-      const filtered = store.contacts.filter(
+      const contacts = store.getContacts();
+      const filtered = contacts.filter(
         (c) => c.display_name.toLowerCase().includes(query) || c.onion_address.toLowerCase().includes(query)
       );
       this.renderChatList(filtered);
@@ -1102,7 +1104,8 @@ class VchatApp {
     const contactSearch = document.getElementById("contacts-search-input") as HTMLInputElement | null;
     contactSearch?.addEventListener("input", () => {
       const query = contactSearch.value.toLowerCase();
-      const filtered = store.contacts.filter(
+      const contacts = store.getContacts();
+      const filtered = contacts.filter(
         (c) => c.display_name.toLowerCase().includes(query) || c.onion_address.toLowerCase().includes(query)
       );
       this.renderContacts(filtered);
@@ -1122,7 +1125,7 @@ class VchatApp {
           indicator.classList.add("hidden");
         }
       }
-    } catch (err) {
+    } catch {
       // silent
     }
   }
@@ -1135,7 +1138,7 @@ class VchatApp {
         clearTimeout(this.typingTimeout);
         this.typingTimeout = setTimeout(() => this.sendTyping(false), 3000);
       }
-    } catch (err) {
+    } catch {
       // silent
     }
   }
@@ -1222,9 +1225,7 @@ class VchatApp {
     const membersEl = document.getElementById("group-info-members");
     if (nameEl) nameEl.textContent = group.name;
     if (membersEl) {
-      membersEl.innerHTML = group.members
-        .map((m: any) => `<div class="group-member"><span>${this.esc(m.name || m.onion_address)}</span></div>`)
-        .join("");
+      membersEl.innerHTML = `<div class="group-member"><span>${this.esc(group.created_by)}</span><span class="member-role">admin</span></div>`;
     }
     this.showModal("group-info-modal");
   }
@@ -1233,7 +1234,7 @@ class VchatApp {
     const container = document.getElementById("reply-preview-container");
     const textEl = document.getElementById("reply-preview-text");
     if (container && textEl) {
-      textEl.textContent = msg.text || "Attachment";
+      textEl.textContent = msg.content || "Attachment";
       container.classList.remove("hidden");
     }
   }
@@ -1251,9 +1252,9 @@ class VchatApp {
 
   private async markAsRead(onion: string): Promise<void> {
     try {
-      await api.markAsRead(onion);
-      store.unreadCounts[onion] = 0;
-    } catch (err) {
+      await api.markMessagesRead(onion);
+      store.markContactMessagesRead(onion);
+    } catch {
       // silent
     }
   }

@@ -149,7 +149,7 @@ class Store {
   }
 
   updateMessage(messageId: string, updates: Partial<Message>): void {
-    for (const [key, msgs] of this.messages) {
+    for (const [, msgs] of this.messages) {
       const idx = msgs.findIndex((m) => m.id === messageId);
       if (idx !== -1) {
         msgs[idx] = { ...msgs[idx], ...updates };
