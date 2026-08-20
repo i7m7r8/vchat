@@ -1,44 +1,42 @@
 # Vchat
 
-Ultra-secure P2P Tor-based messaging, video calling, and screen sharing.
+P2P encrypted messenger with embedded Tor. No servers, no tracking.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Tauri App (Android / Desktop)                   │
-│                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
-│  │ Frontend  │  │ WebRTC   │  │ E2E Crypto    │ │
-│  │ (TS/CSS) │←→│ (str0m)  │←→│ (snow+AES)    │ │
-│  └──────────┘  └──────────┘  └───────────────┘ │
-│                     ↕                            │
-│  ┌──────────────────────────────────────────┐   │
-│  │  Rust Backend                            │   │
-│  │  • arti-client (Tor)                     │   │
-│  │  • Onion service (signaling)             │   │
-│  │  • Custom TCP transport via Tor          │   │
-│  └──────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  Tauri 2.x App                               │
+│                                               │
+│  Frontend (TypeScript + CSS)                  │
+│       ↕ Tauri IPC                            │
+│  Backend (Rust)                               │
+│  • E2E Encryption (Noise XX + AES-256-GCM)   │
+│  • Tor (arti-client embedded + SOCKS5)        │
+│  • SQLite Database                            │
+│  • P2P Messaging via onion services           │
+└──────────────────────────────────────────────┘
 ```
 
 ## Features
 
-- **P2P Communication**: No central servers, direct peer-to-peer
-- **Tor Onion Services**: Each peer runs a Tor hidden service
+- **P2P Messaging**: Direct peer-to-peer encrypted messaging via Tor
+- **Tor Onion Services**: Embedded Tor (arti-client) with external Tor fallback
 - **E2E Encryption**: Noise Protocol (XX pattern) + AES-256-GCM
-- **Video Calling**: WebRTC-based video/audio calls
-- **Screen Sharing**: Real-time screen sharing during calls
-- **Cross-Platform**: Android first, then Desktop (Windows/Mac/Linux)
-- **QR Code Contact Exchange**: Share QR codes to add contacts
+- **Group Messaging**: Create groups, add members, group chat
+- **Reactions**: Emoji reactions on messages
+- **Disappearing Messages**: Configurable TTL
+- **Read Receipts & Typing Indicators**
+- **QR Code Contact Exchange**
+- **Cross-Platform**: Android, Linux, Windows, macOS
 
 ## Security Model
 
 1. **Key Exchange**: Noise XX pattern with X25519
-2. **Message Encryption**: AES-256-GCM with derived shared keys
-3. **Transport**: All traffic routed through Tor onion services
-4. **No Metadata**: No central servers to log metadata
-5. **Forward Secrecy**: Ephemeral keys for each session
+2. **Message Encryption**: AES-256-GCM with HKDF-derived keys
+3. **Transport**: Tor onion services (v3)
+4. **No Metadata Collection**: No central servers
+5. **Forward Secrecy**: Ephemeral keys per session
 
 ## Tech Stack
 
@@ -47,65 +45,25 @@ Ultra-secure P2P Tor-based messaging, video calling, and screen sharing.
 | App Framework | Tauri 2.x |
 | Backend | Rust |
 | Frontend | TypeScript + CSS |
-| Tor | Arti (pure Rust) |
-| Encryption | Snow (Noise Protocol) + AES-GCM |
-| WebRTC | str0m (sans-I/O) |
-| Database | SQLite (via rusqlite) |
+| Tor | arti-client (embedded) + SOCKS5 fallback |
+| Encryption | snow (Noise) + AES-256-GCM |
+| Database | SQLite (rusqlite) |
 
 ## Prerequisites
 
-- Rust 1.70+
+- Rust 1.75+
 - Node.js 18+
-- Android SDK + NDK (for Android builds)
-- Tauri CLI
 
-## Development
+## Building
 
+All builds happen via GitHub Actions CI. See `.github/workflows/build.yml`.
+
+For local development:
 ```bash
-# Install dependencies
 npm install
-
-# Run in development mode
-cargo tauri dev
-
-# Build for Android
-cargo tauri android dev
-
-# Build APK
-cargo tauri android build
+npm run tauri dev
 ```
-
-## Project Structure
-
-```
-vchat/
-├── src-tauri/           # Rust backend
-│   ├── src/
-│   │   ├── main.rs      # Entry point
-│   │   ├── lib.rs       # Tauri setup
-│   │   ├── commands.rs  # Tauri commands
-│   │   ├── tor/         # Tor onion service
-│   │   ├── crypto/      # E2E encryption
-│   │   ├── webrtc/      # Video/audio
-│   │   └── messaging/   # Message handling
-│   └── Cargo.toml
-├── src/                 # Frontend
-│   ├── main.ts          # App entry
-│   ├── lib/api.ts       # Tauri API wrapper
-│   └── lib/store.ts     # State management
-├── index.html           # UI
-├── styles.css           # Styling
-└── package.json
-```
-
-## Security Considerations
-
-- All encryption keys are generated locally
-- No data is ever sent to central servers
-- Tor onion services provide network-level anonymity
-- Messages are encrypted end-to-end before transmission
-- SQLite database is stored locally on device
 
 ## License
 
-MIT
+GPL-3.0-only

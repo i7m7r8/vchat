@@ -15,29 +15,38 @@ class VchatApp {
   async init(): Promise<void> {
     try {
       await this.initDatabase();
-      await this.loadIdentity();
-      await this.loadContacts();
-      await this.loadGroups();
-      await this.loadCallHistory();
-      await this.updateTorStatus();
-      this.setupNavigation();
-      this.setupChatView();
-      this.setupGroupChatView();
-      this.setupModals();
-      this.setupCallOverlay();
-      this.setupContextMenu();
-      this.setupEmojiPicker();
-      this.setupSearch();
-      this.showScreen("chats");
-      this.setupEventListeners();
-      this.setupSettings();
-
-      setInterval(() => this.updateTorStatus(), 30000);
-      setInterval(() => this.updateTypingIndicators(), 5000);
     } catch (err) {
-      console.error("Init failed:", err);
-      this.showToast("Failed to initialize app");
+      console.warn("Database init check failed (retrying):", err);
+      await new Promise((r) => setTimeout(r, 500));
+      try {
+        await this.initDatabase();
+      } catch (err2) {
+        console.error("Database init failed permanently:", err2);
+      }
     }
+
+    // ALWAYS set up UI regardless of data loading status
+    this.setupNavigation();
+    this.setupChatView();
+    this.setupGroupChatView();
+    this.setupModals();
+    this.setupCallOverlay();
+    this.setupContextMenu();
+    this.setupEmojiPicker();
+    this.setupSearch();
+    this.setupEventListeners();
+    this.setupSettings();
+    this.showScreen("chats");
+
+    // Load data — each is independent, failures are non-fatal
+    await this.loadIdentity().catch((e) => console.warn("Identity load:", e));
+    await this.loadContacts().catch((e) => console.warn("Contacts load:", e));
+    await this.loadGroups().catch((e) => console.warn("Groups load:", e));
+    await this.loadCallHistory().catch((e) => console.warn("Calls load:", e));
+    await this.updateTorStatus().catch((e) => console.warn("Tor status:", e));
+
+    setInterval(() => this.updateTorStatus(), 30000);
+    setInterval(() => this.updateTypingIndicators(), 5000);
   }
 
   async initDatabase(): Promise<void> {
@@ -50,6 +59,9 @@ class VchatApp {
       try {
         identity = await api.getIdentity();
       } catch {
+        // command failed
+      }
+      if (!identity) {
         identity = await api.initIdentity("User");
       }
       if (identity) {
@@ -928,31 +940,7 @@ class VchatApp {
 
   async startCall(video: boolean): Promise<void> {
     if (!this.currentContact) return;
-    try {
-      const callId = video
-        ? await api.startVideoCall(this.currentContact.onion_address)
-        : await api.startAudioCall(this.currentContact.onion_address);
-      this.activeCallId = callId;
-      this.callSeconds = 0;
-
-      const overlay = document.getElementById("call-overlay");
-      overlay?.classList.remove("hidden");
-
-      const statusEl = document.getElementById("call-status");
-      if (statusEl) statusEl.textContent = "Ringing...";
-
-      const nameEl = document.getElementById("call-name");
-      if (nameEl) nameEl.textContent = this.currentContact.display_name;
-
-      this.callTimerInterval = setInterval(() => {
-        this.callSeconds++;
-        const timerEl = document.getElementById("call-timer");
-        if (timerEl) timerEl.textContent = this.formatDuration(this.callSeconds);
-      }, 1000);
-    } catch (err) {
-      console.error("Failed to start call:", err);
-      this.showToast("Failed to start call");
-    }
+    this.showToast(video ? "Video calls coming soon" : "Voice calls coming soon");
   }
 
   async endCall(): Promise<void> {

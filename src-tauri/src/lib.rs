@@ -80,13 +80,18 @@ pub fn run() {
             let handle = app.handle().clone();
             let webrtc = app_state.webrtc.clone();
 
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = crypto::store::init_db().await {
-                    tracing::error!("Database init failed: {e}");
-                    return;
+            // Initialize DB SYNCHRONOUSLY so all commands can use it immediately
+            tauri::async_runtime::block_on(async {
+                match crypto::store::init_db().await {
+                    Ok(()) => tracing::info!("Database initialized"),
+                    Err(e) => {
+                        tracing::error!("Database init failed: {e}");
+                        panic!("Database init failed: {e}");
+                    }
                 }
-                tracing::info!("Database initialized");
+            });
 
+            tauri::async_runtime::spawn(async move {
                 crate::tor::hidden_service::set_app_handle(handle.clone());
 
                 if let Err(e) = tor::init_tor(&handle).await {

@@ -58,7 +58,7 @@ bincode = "1"
 dirs = "5"
 hex = "0.4"
 url = "2"
-walkdir = "2"
+arti-client = { version = "0.45", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-service", "onion-service-client"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", features = ["invocation"] }
