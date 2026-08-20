@@ -100,8 +100,8 @@ pub async fn add_contact(
         );
     }
 
-    let x25519_bytes: [u8; 32] = key_bytes[..32].try_into()?;
-    let expected_onion = crypto::generate_onion_from_pubkey(&x25519_bytes);
+    let ed25519_bytes: [u8; 32] = key_bytes[32..64].try_into()?;
+    let expected_onion = crypto::generate_onion_from_pubkey(&ed25519_bytes);
 
     if expected_onion != onion_address {
         warn!(

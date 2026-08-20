@@ -1,5 +1,7 @@
+use once_cell::sync::OnceCell;
 use sha2::{Digest, Sha512};
 use std::net::TcpListener as StdTcpListener;
+use tauri::Emitter;
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
@@ -8,10 +10,18 @@ use crate::messaging::protocol::{
     TextPayload, WireMessage, WireMessageType,
 };
 
-pub fn generate_v3_onion_address() -> String {
-    let secret = ed25519_dalek::SigningKey::from_bytes(&rand::random::<[u8; 32]>());
-    let verifying = secret.verifying_key();
-    pubkey_to_v3_onion(&verifying.to_bytes())
+static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
+
+pub fn set_app_handle(handle: tauri::AppHandle) {
+    APP_HANDLE.set(handle).ok();
+}
+
+pub async fn generate_v3_onion_address() -> anyhow::Result<String> {
+    let signing_key = crate::crypto::load_signing_key()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Signing key not available for onion generation"))?;
+    let pubkey = signing_key.public_key_bytes();
+    Ok(pubkey_to_v3_onion(&pubkey))
 }
 
 pub fn pubkey_to_v3_onion(pubkey_bytes: &[u8; 32]) -> String {
@@ -160,15 +170,47 @@ async fn handle_text_message(msg: &WireMessage, addr: &std::net::SocketAddr) -> 
     let text_payload: TextPayload = serde_json::from_slice(&msg.payload)
         .map_err(|e| anyhow::anyhow!("Invalid TextPayload: {e}"))?;
 
-    tracing::info!(
+    let sender_onion = derive_sender_onion(msg)?;
+
+    let content = try_decrypt_content(&text_payload, &sender_onion)
+        .await
+        .unwrap_or_else(|_| text_payload.content.clone());
+
+    let identity = crate::crypto::store::load_identity().await?
+        .ok_or_else(|| anyhow::anyhow!("Identity not initialized"))?;
+
+    let message = crate::commands::Message {
+        id: msg.message_id.clone(),
+        sender: sender_onion.clone(),
+        recipient: identity.onion_address,
+        content,
+        timestamp: msg.timestamp,
+        encrypted: true,
+        message_type: crate::commands::MessageType::Text,
+        sequence_num: msg.sequence as i64,
+        reply_to: text_payload.reply_to,
+        delivered: false,
+        read: false,
+        expires_at: None,
+    };
+
+    crate::crypto::store::save_message(&message).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("new-message", &message) {
+            warn!("Failed to emit new-message event: {e}");
+        }
+    }
+
+    info!(
         target: "vchat::messages",
-        from = %hex::encode(&msg.sender_pubkey),
-        content_len = text_payload.content.len(),
+        from = %sender_onion,
+        content_len = message.content.len(),
         sequence = msg.sequence,
-        "TextMessage received from {addr}"
+        "TextMessage processed from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_call_invite(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -193,7 +235,7 @@ async fn handle_call_invite(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
         ),
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -307,21 +349,22 @@ async fn handle_default(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyho
     build_ack_response(msg)
 }
 
-fn build_ack_response(msg: &WireMessage) -> anyhow::Result<Vec<u8>> {
+async fn build_ack_response(msg: &WireMessage) -> anyhow::Result<Vec<u8>> {
     let ack_payload = serde_json::json!({
         "status": "ok",
         "original_seq": msg.sequence,
     });
     let payload_bytes = serde_json::to_vec(&ack_payload)?;
 
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(&rand::random::<[u8; 32]>());
-    let verifying_key = signing_key.verifying_key();
+    let signing_key = crate::crypto::load_signing_key()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Signing key not available for ACK"))?;
 
     let seq = msg.sequence + 1;
 
     let response = crate::messaging::protocol::create_wire_message(
-        &signing_key,
-        &verifying_key,
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
         WireMessageType::Ack,
         payload_bytes,
         uuid::Uuid::new_v4().to_string(),
@@ -329,6 +372,51 @@ fn build_ack_response(msg: &WireMessage) -> anyhow::Result<Vec<u8>> {
     )?;
 
     serialize_wire_message(&response)
+}
+
+fn derive_sender_onion(msg: &WireMessage) -> anyhow::Result<String> {
+    if msg.sender_pubkey.len() == 32 {
+        let key: [u8; 32] = msg.sender_pubkey[..32]
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid sender key"))?;
+        Ok(pubkey_to_v3_onion(&key))
+    } else {
+        anyhow::bail!(
+            "Invalid sender public key length: {}",
+            msg.sender_pubkey.len()
+        )
+    }
+}
+
+async fn try_decrypt_content(
+    text_payload: &TextPayload,
+    sender_onion: &str,
+) -> anyhow::Result<String> {
+    let contact = crate::crypto::store::load_single_contact(sender_onion)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Sender not in contacts"))?;
+
+    if contact.public_key.len() < 64 {
+        anyhow::bail!("Contact public key too short for x25519 extraction");
+    }
+
+    let their_x25519_hex = &contact.public_key[..64];
+    let their_x25519_bytes: [u8; 32] = hex::decode(their_x25519_hex)?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("Invalid x25519 key length"))?;
+
+    let their_x25519_pub = x25519_dalek::PublicKey::from(their_x25519_bytes);
+    let our_secret = crate::crypto::load_static_secret()
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No x25519 static secret available"))?;
+
+    let shared_key = crate::crypto::derive_shared_key(&our_secret, &their_x25519_pub);
+    let ciphertext = hex::decode(&text_payload.content)
+        .map_err(|e| anyhow::anyhow!("Failed to decode ciphertext hex: {e}"))?;
+
+    let plaintext = crate::crypto::decrypt_message(&shared_key, &ciphertext)?;
+    String::from_utf8(plaintext)
+        .map_err(|e| anyhow::anyhow!("Decrypted content is not valid UTF-8: {e}"))
 }
 
 async fn write_error_response(

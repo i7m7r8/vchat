@@ -433,9 +433,9 @@ pub async fn save_message_with_encrypted(
     let conn = db.as_ref().context("Database not initialized")?;
     let encrypted_int: i32 = if encrypted_content.is_some() { 1 } else { 0 };
     conn.execute(
-        "INSERT OR REPLACE INTO messages (id, sender, recipient, content, timestamp, encrypted, message_type, sequence_num, reply_to)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![id, sender, recipient, content, timestamp, encrypted_int, message_type, sequence_num, reply_to],
+        "INSERT OR REPLACE INTO messages (id, sender, recipient, content, encrypted_content, timestamp, encrypted, message_type, sequence_num, reply_to)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![id, sender, recipient, content, encrypted_content, timestamp, encrypted_int, message_type, sequence_num, reply_to],
     )
     .context("Failed to save message with encrypted content")?;
     Ok(())

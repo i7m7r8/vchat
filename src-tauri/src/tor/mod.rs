@@ -36,7 +36,7 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     let state = TOR_STATE.clone();
     let mut tor_state = state.write().await;
 
-    let onion = hidden_service::generate_v3_onion_address();
+    let onion = hidden_service::generate_v3_onion_address().await?;
     let local_port = hidden_service::find_available_port().await?;
 
     let circuit_id = format!("circuit-{}", uuid::Uuid::new_v4());
@@ -69,9 +69,19 @@ pub async fn get_onion_address() -> Result<String> {
 }
 
 pub async fn is_tor_ready() -> bool {
-    let state = TOR_STATE.clone();
-    let tor_state = state.read().await;
-    tor_state.is_ready
+    match tokio::net::TcpStream::connect("127.0.0.1:9050").await {
+        Ok(stream) => {
+            drop(stream);
+            true
+        }
+        Err(_) => match tokio::net::TcpStream::connect("127.0.0.1:9150").await {
+            Ok(stream) => {
+                drop(stream);
+                true
+            }
+            Err(_) => false,
+        },
+    }
 }
 
 pub async fn get_local_port() -> Option<u16> {
@@ -109,15 +119,24 @@ pub async fn get_tor_circuit_info() -> Result<CircuitInfo> {
         .map(|t| t.elapsed().as_secs())
         .unwrap_or(0);
 
+    let socks_ok = is_tor_ready().await;
+    if !socks_ok {
+        anyhow::bail!("Tor SOCKS proxy not reachable on port 9050 or 9150");
+    }
+
     Ok(CircuitInfo {
         circuit_id,
         hop_count: tor_state.circuit_hop_count,
         uptime_secs,
-        exit_node: generate_pseudo_exit_node(),
+        exit_node: "(requires Tor control port)".to_string(),
     })
 }
 
 pub async fn refresh_circuit() -> Result<()> {
+    if !is_tor_ready().await {
+        anyhow::bail!("Tor SOCKS proxy not reachable. Cannot refresh circuit.");
+    }
+
     let state = TOR_STATE.clone();
     let mut tor_state = state.write().await;
 
@@ -133,11 +152,6 @@ pub async fn refresh_circuit() -> Result<()> {
     );
 
     Ok(())
-}
-
-fn generate_pseudo_exit_node() -> String {
-    let bytes: [u8; 20] = rand::random();
-    hex::encode(bytes)
 }
 
 async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {

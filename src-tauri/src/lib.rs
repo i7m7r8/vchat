@@ -87,6 +87,8 @@ pub fn run() {
                 }
                 tracing::info!("Database initialized");
 
+                crate::tor::hidden_service::set_app_handle(handle.clone());
+
                 if let Err(e) = tor::init_tor(&handle).await {
                     tracing::error!("Tor init failed: {e}");
                 }

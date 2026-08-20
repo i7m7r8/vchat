@@ -42,7 +42,7 @@ pub async fn generate_identity(display_name: &str) -> Result<Identity> {
     let x25519_kp = keys::X25519KeyPair::generate();
     let ed25519_kp = keys::Ed25519KeyPair::generate()?;
 
-    let onion_address = generate_onion_from_pubkey(&x25519_kp.public_bytes());
+    let onion_address = generate_onion_from_pubkey(&ed25519_kp.public_key_bytes());
 
     let mut combined_pub = Vec::with_capacity(64);
     combined_pub.extend_from_slice(&x25519_kp.public_bytes());
