@@ -279,6 +279,14 @@
 
     <!-- ==================== CONTEXT MENU ==================== -->
     <div id="context-menu" class="context-menu hidden">
+      <div class="ctx-reactions">
+        <button class="ctx-reaction-btn" data-emoji="👍">👍</button>
+        <button class="ctx-reaction-btn" data-emoji="❤️">❤️</button>
+        <button class="ctx-reaction-btn" data-emoji="😂">😂</button>
+        <button class="ctx-reaction-btn" data-emoji="😮">😮</button>
+        <button class="ctx-reaction-btn" data-emoji="😢">😢</button>
+        <button class="ctx-reaction-btn" data-emoji="🔥">🔥</button>
+      </div>
       <button id="ctx-reply" class="context-menu-item">Reply</button>
       <button id="ctx-copy" class="context-menu-item">Copy</button>
       <button id="ctx-forward" class="context-menu-item">Forward</button>
@@ -302,6 +310,8 @@
           <input id="add-contact-name" type="text" placeholder="Alice">
           <label for="add-contact-onion">Onion Address</label>
           <input id="add-contact-onion" type="text" placeholder="alice7x...k3q.onion">
+          <label for="add-contact-pubkey">Public Key (optional)</label>
+          <input id="add-contact-pubkey" type="text" placeholder="Paste full public key from QR code">
         </div>
         <div class="modal-footer">
           <button id="add-contact-save" class="btn btn-primary">Save</button>
@@ -379,6 +389,11 @@
           <div class="contact-info-display">
             <div id="contact-info-name" class="contact-info-name"></div>
             <div id="contact-info-onion" class="contact-info-onion"></div>
+          </div>
+          <div class="contact-info-actions">
+            <button id="contact-info-verify" class="btn btn-secondary">Verify Contact</button>
+            <button id="contact-info-block" class="btn btn-secondary">Block Contact</button>
+            <button id="contact-info-delete" class="btn btn-danger">Delete Contact</button>
           </div>
         </div>
       </div>

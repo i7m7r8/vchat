@@ -591,6 +591,15 @@ class VchatApp {
         }, 500);
       });
       el.addEventListener("touchend", () => clearTimeout(pressTimer));
+
+      el.addEventListener("dblclick", async () => {
+        try {
+          await api.addReaction(msg.id, "❤️");
+          const reactions = await api.getReactions(msg.id);
+          store.setReactionsForMessage(msg.id, reactions);
+          this.renderMessages(messages);
+        } catch { /* silent */ }
+      });
     });
   }
 
@@ -710,18 +719,21 @@ class VchatApp {
     document.getElementById("add-contact-save")?.addEventListener("click", async () => {
       const nameInput = document.getElementById("add-contact-name") as HTMLInputElement | null;
       const onionInput = document.getElementById("add-contact-onion") as HTMLInputElement | null;
+      const pubkeyInput = document.getElementById("add-contact-pubkey") as HTMLInputElement | null;
       const name = nameInput?.value.trim();
       const onion = onionInput?.value.trim();
+      const pubkey = pubkeyInput?.value.trim() || "";
       if (!name || !onion) {
         this.showToast("Name and onion address required");
         return;
       }
       try {
-        await api.addContact(name, "", onion);
+        await api.addContact(name, pubkey, onion);
         await this.loadContacts();
         this.hideModal("add-contact-modal");
         if (nameInput) nameInput.value = "";
         if (onionInput) onionInput.value = "";
+        if (pubkeyInput) pubkeyInput.value = "";
         this.showToast("Contact added");
       } catch (err) {
         console.error("Failed to add contact:", err);
@@ -1017,6 +1029,25 @@ class VchatApp {
       this.hideContextMenu();
     });
 
+    document.querySelectorAll(".ctx-reaction-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (this.contextMenuTarget) {
+          const emoji = btn.getAttribute("data-emoji");
+          if (emoji) {
+            try {
+              await api.addReaction(this.contextMenuTarget.id, emoji);
+              if (this.currentContact) {
+                const reactions = await api.getReactions(this.contextMenuTarget.id);
+                store.setReactionsForMessage(this.contextMenuTarget.id, reactions);
+                this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
+              }
+            } catch { /* silent */ }
+          }
+        }
+        this.hideContextMenu();
+      });
+    });
+
     document.addEventListener("click", (e) => {
       const menu = document.getElementById("context-menu");
       if (menu && !menu.contains(e.target as Node)) {
@@ -1285,6 +1316,44 @@ class VchatApp {
     if (nameEl) nameEl.textContent = contact.display_name;
     if (onionEl) onionEl.textContent = contact.onion_address;
     this.showModal("contact-info-modal");
+
+    const verifyBtn = document.getElementById("contact-info-verify");
+    const blockBtn = document.getElementById("contact-info-block");
+    const deleteBtn = document.getElementById("contact-info-delete");
+
+    const cleanup = () => {
+      verifyBtn?.replaceWith(verifyBtn!.cloneNode(true));
+      blockBtn?.replaceWith(blockBtn!.cloneNode(true));
+      deleteBtn?.replaceWith(deleteBtn!.cloneNode(true));
+    };
+    cleanup();
+
+    document.getElementById("contact-info-verify")?.addEventListener("click", async () => {
+      try {
+        await api.verifyContact(contact.onion_address);
+        this.showToast("Contact verified");
+        this.hideModal("contact-info-modal");
+        await this.loadContacts();
+      } catch { this.showToast("Failed to verify"); }
+    });
+
+    document.getElementById("contact-info-block")?.addEventListener("click", async () => {
+      try {
+        await api.blockContact(contact.onion_address);
+        this.showToast("Contact blocked");
+        this.hideModal("contact-info-modal");
+        await this.loadContacts();
+      } catch { this.showToast("Failed to block"); }
+    });
+
+    document.getElementById("contact-info-delete")?.addEventListener("click", async () => {
+      try {
+        await api.deleteContact(contact.onion_address);
+        this.showToast("Contact deleted");
+        this.hideModal("contact-info-modal");
+        await this.loadContacts();
+      } catch { this.showToast("Failed to delete"); }
+    });
   }
 
   private showGroupInfo(group: Group): void {

@@ -1,6 +1,7 @@
 {
   "name": "vchat",
   "version": "2.0.0",
+  "license": "GPL-3.0-only",
   "description": "Fully-featured P2P encrypted messenger with Tor, E2E encryption, video calls, file sharing, groups, and screen sharing - no servers, no hosting",
   "private": true,
   "type": "module",

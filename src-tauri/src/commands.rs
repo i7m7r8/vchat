@@ -342,7 +342,7 @@ pub async fn send_message(
     content: String,
     message_type: MessageType,
 ) -> Result<Message, String> {
-    messaging::send_message(&recipient_onion, &content, message_type)
+    messaging::send_message(&recipient_onion, &content, message_type, None)
         .await
         .map_err(|e| e.to_string())
 }
@@ -354,94 +354,9 @@ pub async fn send_reply_message(
     message_type: MessageType,
     reply_to: String,
 ) -> Result<Message, String> {
-    let identity = store::load_identity()
+    messaging::send_message(&recipient_onion, &content, message_type, Some(&reply_to))
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Identity not initialized".to_string())?;
-
-    let _signing_key = crypto::load_signing_key()
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Signing key not found".to_string())?;
-
-    let static_secret = crypto::load_static_secret()
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Static secret not found".to_string())?;
-
-    let db_contacts = store::load_contacts().await.map_err(|e| e.to_string())?;
-    let contact = db_contacts
-        .iter()
-        .find(|c| c.onion_address == recipient_onion)
-        .ok_or_else(|| format!("Contact not found: {recipient_onion}"))?;
-
-    let their_x25519_pubkey_bytes: [u8; 32] = hex::decode(&contact.public_key)
-        .map_err(|e| format!("Invalid contact public key: {e}"))?
-        .get(..32)
-        .ok_or_else(|| "Public key too short".to_string())?
-        .try_into()
-        .map_err(|_| "Invalid key length".to_string())?;
-
-    let their_x25519_pub = x25519_dalek::PublicKey::from(their_x25519_pubkey_bytes);
-    let shared_key = crypto::derive_shared_key(&static_secret, &their_x25519_pub);
-
-    let plaintext = content.as_bytes();
-    let encrypted = crypto::encrypt_message(&shared_key, plaintext)
-        .map_err(|e| e.to_string())?;
-
-    let seq = store::get_message_count(&recipient_onion)
-        .await
-        .map_err(|e| e.to_string())? as i64
-        + 1;
-
-    let message = Message {
-        id: uuid::Uuid::new_v4().to_string(),
-        sender: identity.onion_address,
-        recipient: recipient_onion.clone(),
-        content,
-        timestamp: now_ts(),
-        encrypted: true,
-        message_type,
-        sequence_num: seq,
-        reply_to: Some(reply_to),
-        delivered: false,
-        read: false,
-        expires_at: None,
-    };
-
-    store::save_message_with_encrypted(
-        &message.id,
-        &message.sender,
-        &message.recipient,
-        Some(&message.content),
-        Some(&encrypted),
-        message.timestamp,
-        message.message_type.as_str(),
-        "sent",
-        Some(message.sequence_num),
-        message.reply_to.as_deref(),
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    match crate::tor::connect_to_peer(&recipient_onion, 4433).await {
-        Ok(mut stream) => {
-            use tokio::io::AsyncWriteExt;
-            if let Err(e) = stream.write_all(&encrypted).await {
-                tracing::warn!("Failed to send to {recipient_onion}: {e} (message stored locally)");
-            }
-        }
-        Err(e) => {
-            tracing::warn!("Cannot reach {recipient_onion}: {e} (message stored locally for retry)");
-        }
-    }
-
-    crate::error::audit_log(
-        "message_sent",
-        &format!("to={recipient_onion}, seq={seq}, reply_to={}", message.reply_to.as_deref().unwrap_or("none")),
-    );
-
-    Ok(message)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1176,36 +1091,40 @@ pub async fn get_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub async fn update_settings(settings: AppSettings) -> Result<AppSettings, String> {
-    let settings_json = serde_json::to_string(&settings).unwrap_or_default();
+pub async fn update_settings(settings: serde_json::Value) -> Result<AppSettings, String> {
+    let mut current = get_settings().await?;
 
-    let set = |key: String, val: String| async move {
-        store::set_setting(&key, &val)
-            .await
-            .map_err(|e| e.to_string())
+    if let Some(v) = settings.get("disappearing_messages_default").and_then(|v| v.as_bool()) {
+        current.disappearing_messages_default = v;
+    }
+    if let Some(v) = settings.get("default_ttl_secs").and_then(|v| v.as_u64()) {
+        current.default_ttl_secs = v;
+    }
+    if let Some(v) = settings.get("read_receipts").and_then(|v| v.as_bool()) {
+        current.read_receipts = v;
+    }
+    if let Some(v) = settings.get("typing_indicators").and_then(|v| v.as_bool()) {
+        current.typing_indicators = v;
+    }
+    if let Some(v) = settings.get("notifications_enabled").and_then(|v| v.as_bool()) {
+        current.notifications_enabled = v;
+    }
+    if let Some(v) = settings.get("theme").and_then(|v| v.as_str()) {
+        current.theme = v.to_string();
+    }
+
+    let persist = |key: &str, val: String| async move {
+        store::set_setting(key, &val).await.map_err(|e| e.to_string())
     };
 
-    set(
-        "disappearing_messages_default".to_string(),
-        settings.disappearing_messages_default.to_string(),
-    )
-    .await?;
+    persist("disappearing_messages_default", current.disappearing_messages_default.to_string()).await?;
+    persist("default_ttl_secs", current.default_ttl_secs.to_string()).await?;
+    persist("read_receipts", current.read_receipts.to_string()).await?;
+    persist("typing_indicators", current.typing_indicators.to_string()).await?;
+    persist("notifications_enabled", current.notifications_enabled.to_string()).await?;
+    persist("theme", current.theme.clone()).await?;
 
-    set("default_ttl_secs".to_string(), settings.default_ttl_secs.to_string()).await?;
+    crate::error::audit_log("settings_updated", &serde_json::to_string(&settings).unwrap_or_default());
 
-    set("read_receipts".to_string(), settings.read_receipts.to_string()).await?;
-
-    set("typing_indicators".to_string(), settings.typing_indicators.to_string()).await?;
-
-    set(
-        "notifications_enabled".to_string(),
-        settings.notifications_enabled.to_string(),
-    )
-    .await?;
-
-    set("theme".to_string(), settings.theme.clone()).await?;
-
-    crate::error::audit_log("settings_updated", &settings_json);
-
-    Ok(settings)
+    Ok(current)
 }

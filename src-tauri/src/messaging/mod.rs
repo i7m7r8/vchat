@@ -92,29 +92,30 @@ pub async fn add_contact(
     public_key: &str,
     onion_address: &str,
 ) -> Result<Contact> {
-    let key_bytes = hex::decode(public_key)?;
-    if key_bytes.len() != 64 {
-        bail!(
-            "Public key must be 64 hex-encoded bytes (x25519 + ed25519), got {}",
-            key_bytes.len()
-        );
-    }
-
-    let ed25519_bytes: [u8; 32] = key_bytes[32..64].try_into()?;
-    let expected_onion = crypto::generate_onion_from_pubkey(&ed25519_bytes);
-
-    if expected_onion != onion_address {
-        warn!(
-            "Onion mismatch: expected={expected_onion}, got={onion_address}. \
-             Contact may be tampered with or key rotation occurred."
-        );
-    }
+    let effective_key = if public_key.len() >= 64 {
+        let key_bytes = hex::decode(public_key)?;
+        if key_bytes.len() == 64 {
+            let ed25519_bytes: [u8; 32] = key_bytes[32..64].try_into()?;
+            let expected_onion = crypto::generate_onion_from_pubkey(&ed25519_bytes);
+            if expected_onion != onion_address {
+                warn!(
+                    "Onion mismatch: expected={expected_onion}, got={onion_address}. \
+                     Contact may be tampered with."
+                );
+            }
+            public_key.to_string()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
 
     let now = chrono::Utc::now().timestamp();
     let contact = Contact {
         id: uuid::Uuid::new_v4().to_string(),
         display_name: display_name.to_string(),
-        public_key: public_key.to_string(),
+        public_key: effective_key,
         onion_address: onion_address.to_string(),
         added_at: now,
         verified: false,
@@ -138,6 +139,7 @@ pub async fn send_message(
     recipient_onion: &str,
     content: &str,
     message_type: MessageType,
+    reply_to: Option<&str>,
 ) -> Result<Message> {
     let identity = load_identity_or_bail().await?;
     let signing_key = load_signing_key_or_bail().await?;
@@ -155,7 +157,7 @@ pub async fn send_message(
 
     let text_payload = TextPayload {
         content: content.to_string(),
-        reply_to: None,
+        reply_to: reply_to.map(|s| s.to_string()),
     };
     let payload_bytes = payload_to_json(&text_payload)?;
 
@@ -180,7 +182,7 @@ pub async fn send_message(
         encrypted: true,
         message_type,
         sequence_num: seq,
-        reply_to: None,
+        reply_to: reply_to.map(|s| s.to_string()),
         delivered: false,
         read: false,
         expires_at: None,
