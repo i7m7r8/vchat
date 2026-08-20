@@ -32,8 +32,7 @@ rand = "0.8"
 zeroize = { version = "1", features = ["derive"] }
 base64 = "0.22"
 
-# Async runtime
-tokio = { version = "1", features = ["full"] }
+# Async runtime (platform-specific features for Android compatibility)
 futures = "0.3"
 
 # Logging / Auditing
@@ -60,8 +59,12 @@ hex = "0.4"
 url = "2"
 arti-client = { version = "0.45", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-service", "onion-service-client"] }
 
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tokio = { version = "1", features = ["full"] }
+
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.21", features = ["invocation"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "fs"] }
 
 [features]
 default = ["custom-protocol"]

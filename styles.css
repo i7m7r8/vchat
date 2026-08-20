@@ -711,11 +711,19 @@ body {
 }
 
 .reply-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   background: var(--surface);
   border-left: 3px solid var(--accent);
   padding: 8px 12px;
   margin-bottom: 8px;
   border-radius: 4px;
+}
+
+.reply-preview.hidden {
+  display: none;
 }
 
 .reply-preview-text {
@@ -1468,7 +1476,7 @@ body {
 
 .call-tab.active {
   background: var(--accent);
-  color: #text;
+  color: var(--text);
 }
 
 .profile-card {
@@ -1771,4 +1779,268 @@ textarea::placeholder {
   padding: 12px;
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+/* ── Avatar Sm ──────────────────────────────────────────────────── */
+
+.avatar-sm {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  font-size: 12px;
+}
+
+/* ── Tor Badge Variants ─────────────────────────────────────────── */
+
+.tor-badge.connected {
+  color: var(--success);
+}
+
+.tor-badge.error {
+  color: var(--error);
+}
+
+/* ── QR Code Display ────────────────────────────────────────────── */
+
+.qr-code-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0;
+}
+
+.qr-code-display img {
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 12px;
+}
+
+/* ── Toast Container ────────────────────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 400;
+  pointer-events: none;
+}
+
+.toast-container .toast {
+  position: static;
+  transform: none;
+}
+
+/* ── Group Item ─────────────────────────────────────────────────── */
+
+.group-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.group-item:active {
+  background: var(--surface-light);
+}
+
+/* ── Call Log Item ──────────────────────────────────────────────── */
+
+.call-log-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.call-log-item:active {
+  background: var(--surface-light);
+}
+
+/* ── File Picker Input ──────────────────────────────────────────── */
+
+#file-picker-input {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: var(--surface-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  margin-bottom: 12px;
+}
+
+#file-picker-input::-webkit-file-upload-button {
+  background: var(--surface-light);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  margin-right: 12px;
+}
+
+/* ── Chat List Improvements ─────────────────────────────────────── */
+
+.chat-list-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-list-item:last-child {
+  border-bottom: none;
+}
+
+/* ── Call History Improvements ──────────────────────────────────── */
+
+.call-history-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.call-history-item:last-child {
+  border-bottom: none;
+}
+
+/* ── Contact List Improvements ──────────────────────────────────── */
+
+.contact-list-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.contact-list-item:last-child {
+  border-bottom: none;
+}
+
+/* ── Group List Improvements ────────────────────────────────────── */
+
+.group-list-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.group-list-item:last-child {
+  border-bottom: none;
+}
+
+/* ── Responsive / Desktop ───────────────────────────────────────── */
+
+@media (min-width: 768px) {
+  #app {
+    max-width: 420px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  body {
+    background: #050508;
+  }
+
+  .bottom-nav {
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
+  }
+
+  .modal-overlay {
+    align-items: center;
+  }
+
+  .modal-sheet {
+    border-radius: var(--radius-lg);
+    max-width: 400px;
+    margin: 0 auto;
+    animation: fadeIn 0.2s ease-out;
+  }
+}
+
+/* ── Touch Target Improvements ──────────────────────────────────── */
+
+.nav-item {
+  min-height: 48px;
+}
+
+.icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.btn {
+  min-height: 44px;
+}
+
+.context-menu-item {
+  min-height: 48px;
+}
+
+.settings-item {
+  min-height: 52px;
+}
+
+/* ── Smooth Transitions ─────────────────────────────────────────── */
+
+.screen {
+  transition: opacity 0.15s ease-out;
+}
+
+.tor-badge {
+  transition: color 0.3s;
+}
+
+.fab {
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.fab:hover {
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+}
+
+/* ── Scrollbar for touch devices ────────────────────────────────── */
+
+.messages-container::-webkit-scrollbar,
+.list-container::-webkit-scrollbar {
+  width: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb,
+.list-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Active state feedback ──────────────────────────────────────── */
+
+.toggle:active {
+  transform: scale(0.96);
+}
+
+.tab-btn {
+  position: relative;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* ── Modal overlay backdrop blur ────────────────────────────────── */
+
+.modal-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
