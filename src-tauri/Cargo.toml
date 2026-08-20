@@ -40,7 +40,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Storage
-rusqlite = { version = "0.36", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 # Error handling
 thiserror = "1"
@@ -57,7 +57,6 @@ bincode = "1"
 dirs = "5"
 hex = "0.4"
 url = "2"
-arti-client = { version = "0.45", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-service", "onion-service-client"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tokio = { version = "1", features = ["full"] }

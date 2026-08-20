@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 use once_cell::sync::Lazy;
 
 static TOR_STATE: Lazy<Arc<RwLock<TorState>>> =
@@ -19,7 +19,6 @@ pub struct TorState {
     pub circuit_id: Option<String>,
     pub circuit_started: Option<Instant>,
     pub circuit_hop_count: u8,
-    pub embedded_ready: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -30,36 +29,8 @@ pub struct CircuitInfo {
     pub exit_node: String,
 }
 
-async fn try_embedded_tor() -> Result<()> {
-    info!("Attempting embedded Tor bootstrap (arti-client)...");
-
-    let config = arti_client::TorClientConfig::builder()
-        .build()
-        .map_err(|e| anyhow::anyhow!("Tor config error: {e}"))?;
-
-    let _client = arti_client::TorClient::builder()
-        .config(config)
-        .connect()
-        .await
-        .map_err(|e| anyhow::anyhow!("Tor bootstrap failed: {e}"))?;
-
-    info!("Embedded Tor bootstrapped successfully (client created)");
-    Ok(())
-}
-
 pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     info!("Initializing Tor...");
-
-    let embedded_ok = match try_embedded_tor().await {
-        Ok(()) => {
-            info!("Embedded Tor (arti) bootstrapped successfully");
-            true
-        }
-        Err(e) => {
-            warn!("Embedded Tor unavailable: {e}. Using SOCKS5 fallback.");
-            false
-        }
-    };
 
     let state = TOR_STATE.clone();
     let mut tor_state = state.write().await;
@@ -72,7 +43,6 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     tor_state.onion_address = Some(onion.clone());
     tor_state.local_port = Some(local_port);
     tor_state.is_ready = true;
-    tor_state.embedded_ready = embedded_ok;
     tor_state.circuit_id = Some(circuit_id.clone());
     tor_state.circuit_started = Some(Instant::now());
     tor_state.circuit_hop_count = 3;
@@ -83,7 +53,7 @@ pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
 
     tokio::spawn(hidden_service::accept_loop(listener));
 
-    crate::error::audit_log("tor_ready", &format!("onion={onion}, port={local_port}, embedded={embedded_ok}"));
+    crate::error::audit_log("tor_ready", &format!("onion={onion}, port={local_port}"));
 
     Ok(())
 }
@@ -98,9 +68,19 @@ pub async fn get_onion_address() -> Result<String> {
 }
 
 pub async fn is_tor_ready() -> bool {
-    let state = TOR_STATE.clone();
-    let tor_state = state.read().await;
-    tor_state.is_ready && tor_state.onion_address.is_some()
+    match tokio::net::TcpStream::connect("127.0.0.1:9050").await {
+        Ok(stream) => {
+            drop(stream);
+            true
+        }
+        Err(_) => match tokio::net::TcpStream::connect("127.0.0.1:9150").await {
+            Ok(stream) => {
+                drop(stream);
+                true
+            }
+            Err(_) => false,
+        },
+    }
 }
 
 pub async fn get_local_port() -> Option<u16> {
@@ -110,10 +90,18 @@ pub async fn get_local_port() -> Option<u16> {
 }
 
 pub async fn connect_to_peer(onion_address: &str, port: u16) -> Result<tokio::net::TcpStream> {
-    let target = format!("{onion_address}:{port}");
-    info!("Connecting to peer: {target}");
+    let state = TOR_STATE.clone();
+    let tor_state = state.read().await;
 
-    try_connect_via_socks(&target).await
+    if !tor_state.is_ready {
+        anyhow::bail!("Tor not initialized");
+    }
+
+    let target = format!("{onion_address}:{port}");
+    info!("Connecting to peer via Tor: {target}");
+
+    let stream = try_connect_via_socks(&target).await?;
+    Ok(stream)
 }
 
 pub async fn get_tor_circuit_info() -> Result<CircuitInfo> {
@@ -130,21 +118,24 @@ pub async fn get_tor_circuit_info() -> Result<CircuitInfo> {
         .map(|t| t.elapsed().as_secs())
         .unwrap_or(0);
 
-    let exit_node = if tor_state.embedded_ready {
-        "(embedded-arti)".to_string()
-    } else {
-        "(external-socks5)".to_string()
-    };
+    let socks_ok = is_tor_ready().await;
+    if !socks_ok {
+        anyhow::bail!("Tor SOCKS proxy not reachable on port 9050 or 9150");
+    }
 
     Ok(CircuitInfo {
         circuit_id,
         hop_count: tor_state.circuit_hop_count,
         uptime_secs,
-        exit_node,
+        exit_node: "(requires Tor control port)".to_string(),
     })
 }
 
 pub async fn refresh_circuit() -> Result<()> {
+    if !is_tor_ready().await {
+        anyhow::bail!("Tor SOCKS proxy not reachable. Cannot refresh circuit.");
+    }
+
     let state = TOR_STATE.clone();
     let mut tor_state = state.write().await;
 
@@ -183,7 +174,7 @@ async fn try_connect_via_socks(target: &str) -> Result<tokio::net::TcpStream> {
     Err(last_err.unwrap_or_else(|| {
         anyhow::anyhow!(
             "No Tor SOCKS proxy reachable on 9050/9150. \
-             Ensure Tor is running or install Tor."
+             Install and start Tor: https://torproject.org"
         )
     }))
 }
