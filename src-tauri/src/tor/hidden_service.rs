@@ -246,7 +246,7 @@ async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
         "CallAccept received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -257,7 +257,7 @@ async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
         "CallReject received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -268,7 +268,7 @@ async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyh
         "CallEnd received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_typing_indicator(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -279,7 +279,7 @@ async fn handle_typing_indicator(msg: &WireMessage, addr: &std::net::SocketAddr)
         "TypingIndicator received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_heartbeat(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -325,7 +325,7 @@ async fn handle_file_meta(msg: &WireMessage, addr: &std::net::SocketAddr) -> any
         "FileMeta received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_file_chunk(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -337,7 +337,7 @@ async fn handle_file_chunk(msg: &WireMessage, addr: &std::net::SocketAddr) -> an
         "FileChunk received from {addr}"
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn handle_default(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
@@ -346,7 +346,7 @@ async fn handle_default(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyho
         msg.msg_type, msg.sequence
     );
 
-    build_ack_response(msg)
+    build_ack_response(msg).await
 }
 
 async fn build_ack_response(msg: &WireMessage) -> anyhow::Result<Vec<u8>> {
