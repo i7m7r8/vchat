@@ -1,6 +1,6 @@
 pub mod protocol;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use crate::commands::{
     Contact, FileTransfer, Group, GroupMember, GroupMessage, Message, MessageType, Reaction,
 };

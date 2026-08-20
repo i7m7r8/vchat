@@ -1113,16 +1113,12 @@ pub async fn update_settings(settings: serde_json::Value) -> Result<AppSettings,
         current.theme = v.to_string();
     }
 
-    let persist = |key: &str, val: String| async move {
-        store::set_setting(key, &val).await.map_err(|e| e.to_string())
-    };
-
-    persist("disappearing_messages_default", current.disappearing_messages_default.to_string()).await?;
-    persist("default_ttl_secs", current.default_ttl_secs.to_string()).await?;
-    persist("read_receipts", current.read_receipts.to_string()).await?;
-    persist("typing_indicators", current.typing_indicators.to_string()).await?;
-    persist("notifications_enabled", current.notifications_enabled.to_string()).await?;
-    persist("theme", current.theme.clone()).await?;
+    store::set_setting("disappearing_messages_default", &current.disappearing_messages_default.to_string()).await.map_err(|e| e.to_string())?;
+    store::set_setting("default_ttl_secs", &current.default_ttl_secs.to_string()).await.map_err(|e| e.to_string())?;
+    store::set_setting("read_receipts", &current.read_receipts.to_string()).await.map_err(|e| e.to_string())?;
+    store::set_setting("typing_indicators", &current.typing_indicators.to_string()).await.map_err(|e| e.to_string())?;
+    store::set_setting("notifications_enabled", &current.notifications_enabled.to_string()).await.map_err(|e| e.to_string())?;
+    store::set_setting("theme", &current.theme).await.map_err(|e| e.to_string())?;
 
     crate::error::audit_log("settings_updated", &serde_json::to_string(&settings).unwrap_or_default());
 
