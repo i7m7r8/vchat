@@ -167,12 +167,59 @@
           <input id="settings-name" type="text" class="settings-name-input" readonly>
           <span id="settings-onion" class="settings-onion"></span>
         </div>
-        <div class="settings-actions">
-          <button id="add-contact-open" class="settings-item">Add Contact</button>
-          <button id="create-group-open" class="settings-item">Create Group</button>
-          <button id="qr-code-open" class="settings-item">Show QR Code</button>
-          <button id="edit-name-open" class="settings-item">Edit Display Name</button>
-          <button id="delete-data-open" class="settings-item settings-item--danger">Delete All Data</button>
+        <div class="settings-section">
+          <div class="settings-section-title">Messaging</div>
+          <label class="settings-item">
+            <div class="settings-item-text">
+              <div class="settings-item-title">Disappearing Messages</div>
+              <div class="settings-item-sub">Messages expire after 1 hour by default</div>
+            </div>
+            <input id="toggle-disappearing" type="checkbox" class="toggle">
+          </label>
+          <label class="settings-item">
+            <div class="settings-item-text">
+              <div class="settings-item-title">Read Receipts</div>
+              <div class="settings-item-sub">Show when you've read messages</div>
+            </div>
+            <input id="toggle-read-receipts" type="checkbox" class="toggle" checked>
+          </label>
+          <label class="settings-item">
+            <div class="settings-item-text">
+              <div class="settings-item-title">Typing Indicators</div>
+              <div class="settings-item-sub">Show when you're typing</div>
+            </div>
+            <input id="toggle-typing-indicators" type="checkbox" class="toggle" checked>
+          </label>
+          <label class="settings-item">
+            <div class="settings-item-text">
+              <div class="settings-item-title">Notifications</div>
+              <div class="settings-item-sub">Receive message notifications</div>
+            </div>
+            <input id="toggle-notifications" type="checkbox" class="toggle" checked>
+          </label>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Appearance</div>
+          <label class="settings-item">
+            <div class="settings-item-text">
+              <div class="settings-item-title">Theme</div>
+            </div>
+            <select id="settings-theme" class="settings-select">
+              <option value="dark" selected>Dark</option>
+              <option value="midnight">Midnight</option>
+              <option value="amoled">AMOLED</option>
+            </select>
+          </label>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Actions</div>
+          <div class="settings-actions">
+            <button id="add-contact-open" class="settings-item">Add Contact</button>
+            <button id="create-group-open" class="settings-item">Create Group</button>
+            <button id="qr-code-open" class="settings-item">Show QR Code</button>
+            <button id="edit-name-open" class="settings-item">Edit Display Name</button>
+            <button id="delete-data-open" class="settings-item settings-item--danger">Delete All Data</button>
+          </div>
         </div>
       </div>
     </div>
