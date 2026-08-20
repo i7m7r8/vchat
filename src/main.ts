@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { api, Contact, Message, Identity, Group, GroupMessage, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
 import { store } from "./lib/store";
 
@@ -28,6 +29,8 @@ class VchatApp {
       this.setupEmojiPicker();
       this.setupSearch();
       this.showScreen("chats");
+      this.setupEventListeners();
+      this.setupSettings();
 
       setInterval(() => this.updateTorStatus(), 30000);
       setInterval(() => this.updateTypingIndicators(), 5000);
@@ -476,7 +479,7 @@ class VchatApp {
     }
   }
 
-  renderMessages(messages: Message[]): void {
+  async renderMessages(messages: Message[]): Promise<void> {
     const container = document.getElementById("chat-messages");
     if (!container) return;
 
@@ -488,6 +491,13 @@ class VchatApp {
           <p>Send a message to start the conversation</p>
         </div>`;
       return;
+    }
+
+    for (const msg of messages) {
+      try {
+        const reactions = await api.getReactions(msg.id);
+        store.setReactionsForMessage(msg.id, reactions);
+      } catch { /* silent */ }
     }
 
     const identity = store.getIdentity();
@@ -849,7 +859,8 @@ class VchatApp {
         const reader = new FileReader();
         reader.onload = async () => {
           try {
-            await this.handleFileSend((reader.result as string).split(",")[1]);
+            const base64 = (reader.result as string).split(",")[1] || "";
+            await this.handleFileSend(base64, file.name, file.type);
             this.hideModal("file-picker-modal");
           } catch (err) {
             this.showToast("Failed to send file");
@@ -1073,14 +1084,14 @@ class VchatApp {
     }
   }
 
-  async handleFileSend(filePath: string): Promise<void> {
+  async handleFileSend(fileData: string, fileName: string, mimeType: string): Promise<void> {
     if (!this.currentContact && !this.currentGroup) return;
     try {
       const progressEl = document.getElementById("file-send-progress");
       if (progressEl) progressEl.classList.remove("hidden");
 
       if (this.currentContact) {
-        await api.sendFile(this.currentContact.onion_address, filePath);
+        await api.sendFile(this.currentContact.onion_address, fileData, fileName, mimeType);
       }
       this.showToast("File sent");
       if (progressEl) progressEl.classList.add("hidden");
@@ -1110,6 +1121,62 @@ class VchatApp {
       );
       this.renderContacts(filtered);
     });
+  }
+
+  setupEventListeners(): void {
+    listen<Message>("new-message", (event) => {
+      const msg = event.payload;
+      const identity = store.getIdentity();
+      const isFromMe = msg.sender === identity?.onion_address;
+      const peerOnion = isFromMe ? msg.recipient : msg.sender;
+
+      store.addMessage(peerOnion, msg);
+
+      if (this.currentContact && (this.currentContact.onion_address === peerOnion)) {
+        this.renderMessages(store.getMessagesForContact(peerOnion));
+        this.scrollToBottom();
+        this.markAsRead(peerOnion);
+      }
+
+      this.loadContacts();
+    });
+
+    listen("tor-status-changed", () => {
+      this.updateTorStatus();
+    });
+  }
+
+  setupSettings(): void {
+    const toggles = [
+      { id: "toggle-disappearing", key: "disappearing_messages_default" },
+      { id: "toggle-read-receipts", key: "read_receipts" },
+      { id: "toggle-typing-indicators", key: "typing_indicators" },
+      { id: "toggle-notifications", key: "notifications_enabled" },
+    ];
+
+    for (const toggle of toggles) {
+      const el = document.getElementById(toggle.id) as HTMLInputElement | null;
+      if (el) {
+        el.addEventListener("change", async () => {
+          try {
+            await api.updateSettings({ [toggle.key]: el.checked });
+          } catch (err) {
+            console.error("Failed to update setting:", err);
+          }
+        });
+      }
+    }
+
+    const themeSelect = document.getElementById("settings-theme") as HTMLSelectElement | null;
+    if (themeSelect) {
+      themeSelect.addEventListener("change", async () => {
+        try {
+          await api.updateSettings({ theme: themeSelect.value });
+        } catch (err) {
+          console.error("Failed to update theme:", err);
+        }
+      });
+    }
   }
 
   async updateTypingIndicators(): Promise<void> {

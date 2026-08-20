@@ -961,24 +961,25 @@ pub async fn get_active_calls(
 #[tauri::command]
 pub async fn send_file(
     recipient_onion: String,
-    file_path: String,
+    file_data: String,
+    file_name: String,
+    mime_type: String,
 ) -> Result<FileTransfer, String> {
     let my_onion = get_identity_onion().await?;
-    let path = std::path::Path::new(&file_path);
 
-    let filename = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let filename = if file_name.is_empty() {
+        "unknown".to_string()
+    } else {
+        file_name
+    };
 
-    let mime = mime_guess::from_path(&file_path)
-        .first_or_octet_stream()
-        .to_string();
+    let mime = if mime_type.is_empty() {
+        "application/octet-stream".to_string()
+    } else {
+        mime_type
+    };
 
-    let size = tokio::fs::metadata(&file_path)
-        .await
-        .map(|m| m.len() as i64)
-        .map_err(|e| format!("Cannot read file: {e}"))?;
+    let size = (file_data.len() * 3 / 4) as i64;
 
     let transfer_id = uuid::Uuid::new_v4().to_string();
 
@@ -1175,9 +1176,8 @@ pub async fn get_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub async fn update_settings(settings_json: String) -> Result<AppSettings, String> {
-    let settings: AppSettings = serde_json::from_str(&settings_json)
-        .map_err(|e| format!("Invalid settings JSON: {e}"))?;
+pub async fn update_settings(settings: AppSettings) -> Result<AppSettings, String> {
+    let settings_json = serde_json::to_string(&settings).unwrap_or_default();
 
     let set = |key: String, val: String| async move {
         store::set_setting(&key, &val)

@@ -1,0 +1,12 @@
+Vchat is a peer-to-peer encrypted messenger that routes all traffic through the Tor network.
+
+Features:
+- End-to-end encrypted messaging with AES-256-GCM
+- X25519 key exchange with Noise Protocol
+- Tor hidden service for private connections
+- Group messaging
+- Message reactions
+- Disappearing messages with configurable TTL
+- QR code contact sharing
+- Dark theme UI
+- Open source and privacy-respecting

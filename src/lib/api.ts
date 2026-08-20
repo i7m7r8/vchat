@@ -248,8 +248,8 @@ export const api = {
     invoke("get_active_calls"),
 
   // ── Files ───────────────────────────────────────────────────────────────
-  sendFile: (recipientOnion: string, filePath: string): Promise<FileTransfer> =>
-    invoke("send_file", { recipientOnion, filePath }),
+  sendFile: (recipientOnion: string, fileData: string, fileName: string, mimeType: string): Promise<FileTransfer> =>
+    invoke("send_file", { recipientOnion, fileData, fileName, mimeType }),
 
   getFileTransfers: (): Promise<FileTransfer[]> =>
     invoke("get_file_transfers"),

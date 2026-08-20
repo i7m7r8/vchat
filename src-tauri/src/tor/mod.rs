@@ -16,7 +16,6 @@ pub struct TorState {
     pub onion_address: Option<String>,
     pub is_ready: bool,
     pub local_port: Option<u16>,
-    pub listener: Option<String>,
     pub circuit_id: Option<String>,
     pub circuit_started: Option<Instant>,
     pub circuit_hop_count: u8,
