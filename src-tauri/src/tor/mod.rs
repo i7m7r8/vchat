@@ -39,7 +39,7 @@ async fn try_embedded_tor() -> Result<()> {
 
     let _client = arti_client::TorClient::builder()
         .config(config)
-        .create()
+        .connect()
         .await
         .map_err(|e| anyhow::anyhow!("Tor bootstrap failed: {e}"))?;
 
