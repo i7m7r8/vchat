@@ -172,6 +172,7 @@ pub struct GroupInvitePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct GroupAckPayloadInner {
     pub group_id: String,
     pub message_id: String,
