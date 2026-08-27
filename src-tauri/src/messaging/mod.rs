@@ -156,7 +156,7 @@ pub async fn send_message(
     let msg_id = uuid::Uuid::new_v4().to_string();
 
     let text_payload = TextPayload {
-        content: content.to_string(),
+        content: hex::encode(&encrypted),
         reply_to: reply_to.map(|s| s.to_string()),
     };
     let payload_bytes = payload_to_json(&text_payload)?;

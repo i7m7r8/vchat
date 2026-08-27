@@ -23,6 +23,7 @@ All dependencies are open-source:
 - hex (MIT/Apache-2.0)
 - base64 (MIT/Apache-2.0)
 - url (MIT/Apache-2.0)
+- arti-client (MIT/Apache-2.0)
 - qrcode (MIT)
 - tracing/tracing-subscriber (MIT)
 - anyhow (MIT/Apache-2.0)
@@ -48,7 +49,7 @@ The CI/CD pipeline (.github/workflows/build.yml) uses fixed toolchain versions:
 
 ### Permissions
 
-The app requests no special permissions on Android. Tor connectivity is handled via SOCKS proxy to a locally running Tor daemon.
+The app requests no special permissions on Android. Tor connectivity is handled entirely in-process via the embedded Arti client (pure Rust Tor implementation).
 
 ### Data Storage
 

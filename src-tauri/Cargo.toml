@@ -6,7 +6,7 @@ description = "Fully-featured P2P encrypted messenger with Tor, E2E encryption, 
 authors = ["Vchat Contributors"]
 license = "GPL-3.0-only"
 repository = "https://github.com/i7m7r8/vchat"
-rust-version = "1.75"
+rust-version = "1.91"
 
 [lib]
 name = "vchat_lib"
@@ -45,6 +45,9 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # Error handling
 thiserror = "1"
 anyhow = "1"
+
+# Embedded Tor (Arti - pure Rust Tor implementation)
+arti-client = { version = "0.45", features = ["tokio", "rustls"] }
 
 # QR code generation
 qrcode = "0.14"

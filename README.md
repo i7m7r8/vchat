@@ -12,7 +12,7 @@ P2P encrypted messenger with embedded Tor. No servers, no tracking.
 │       ↕ Tauri IPC                            │
 │  Backend (Rust)                               │
 │  • E2E Encryption (Noise XX + AES-256-GCM)   │
-│  • Tor (SOCKS5 proxy, onion service)          │
+│  • Embedded Tor (Arti - pure Rust)            │
 │  • SQLite Database                            │
 │  • P2P Messaging via onion services           │
 └──────────────────────────────────────────────┘
@@ -21,7 +21,7 @@ P2P encrypted messenger with embedded Tor. No servers, no tracking.
 ## Features
 
 - **P2P Messaging**: Direct peer-to-peer encrypted messaging via Tor
-- **Tor Onion Services**: Each peer runs a Tor hidden service via SOCKS5 proxy
+- **Tor Onion Services**: Each peer runs a Tor hidden service via embedded Arti
 - **E2E Encryption**: Noise Protocol (XX pattern) + AES-256-GCM
 - **Group Messaging**: Create groups, add members, group chat
 - **Reactions**: Emoji reactions on messages
@@ -45,7 +45,7 @@ P2P encrypted messenger with embedded Tor. No servers, no tracking.
 | App Framework | Tauri 2.x |
 | Backend | Rust |
 | Frontend | TypeScript + CSS |
-| Tor | SOCKS5 proxy (requires Tor daemon on port 9050/9150) |
+| Tor | Arti (embedded, pure Rust - no external daemon) |
 | Encryption | snow (Noise) + AES-256-GCM |
 | Database | SQLite (rusqlite) |
 
