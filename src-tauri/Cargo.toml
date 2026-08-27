@@ -40,7 +40,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Storage
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.36", features = ["bundled"] }
 
 # Error handling
 thiserror = "1"
