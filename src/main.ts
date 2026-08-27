@@ -880,10 +880,6 @@ class VchatApp {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0);
-          const imageData = canvas.toDataURL("image/png");
-          
-          // Try to read QR via jsQR-like detection — fall back to manual paste
-          // For production, use a QR library. Here we provide a manual paste option.
           requestAnimationFrame(scanFrame);
         };
         video.addEventListener("playing", () => scanFrame());
