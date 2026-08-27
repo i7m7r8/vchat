@@ -141,7 +141,19 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npx tauri android init
-      - run: npx tauri android build --target aarch64
+      - name: Find NDK and build Android APK
+        run: |
+          NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | head -1)
+          echo "NDK_DIR=$NDK_DIR"
+          TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          CC_BIN=$(ls "$TOOLCHAIN"/aarch64-linux-android*-clang 2>/dev/null | head -1)
+          echo "CC_BIN=$CC_BIN"
+          export CC_aarch64_linux_android="$CC_BIN"
+          export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_BIN"
+          export OPENSSL_STATIC=1
+          export PATH="$TOOLCHAIN:$PATH"
+          npx tauri android build --target aarch64
       - uses: actions/upload-artifact@v4
         with:
           name: vchat-android-aarch64
