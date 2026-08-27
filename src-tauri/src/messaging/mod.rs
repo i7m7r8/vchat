@@ -8,7 +8,7 @@ use crate::crypto;
 use crate::crypto::store;
 use crate::messaging::protocol::{
     create_wire_message, payload_to_json, serialize_wire_message, DeliveryReceiptPayload,
-    FileChunkPayload, FileMetaPayload, ForwardPayload, GroupCreatePayload, GroupMemberInfo,
+    FileChunkPayload, FileMetaPayload, GroupCreatePayload, GroupMemberInfo,
     GroupMessagePayload, ReactionPayload, ReadReceiptPayload, TextPayload, TypingPayload,
     VoiceNotePayload, WireMessageType,
 };
@@ -992,7 +992,7 @@ pub async fn send_forward(
     let their_pub = resolve_contact_pubkey(contact)?;
     let shared_key = crypto::derive_shared_key(&static_secret, &their_pub);
 
-    let forwarded_content = format!(">>> Forwarded from {original_sender}:\n{original_content}");
+    let forwarded_content = format!(">>> Forwarded {message_type} from {original_sender}:\n{original_content}");
     let encrypted = crypto::encrypt_message(&shared_key, forwarded_content.as_bytes())?;
 
     let seq = store::get_message_count(recipient_onion).await? + 1;
