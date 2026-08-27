@@ -1,6 +1,6 @@
 use once_cell::sync::OnceCell;
 use once_cell::sync::Lazy;
-use sha3::Sha3_256;
+use sha3::{Digest, Sha3_256};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::Emitter;
