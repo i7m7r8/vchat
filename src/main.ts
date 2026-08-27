@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import jsQR from "jsqr";
 import { api, Contact, Message, Identity, Group, GroupMessage, GroupMember, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
 import { store } from "./lib/store";
 
@@ -853,37 +854,80 @@ class VchatApp {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         const video = document.createElement("video");
         video.srcObject = stream;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("muted", "");
         video.play();
-        
+
         const scanDiv = document.createElement("div");
         scanDiv.className = "qr-scan-overlay";
         scanDiv.innerHTML = '<p>Point camera at QR code</p>';
         scanDiv.appendChild(video);
-        
+
+        const statusEl = document.createElement("p");
+        statusEl.className = "qr-scan-status";
+        statusEl.textContent = "Scanning...";
+        scanDiv.appendChild(statusEl);
+
         const cancelBtn = document.createElement("button");
         cancelBtn.textContent = "Cancel";
         cancelBtn.className = "btn btn-secondary";
         scanDiv.appendChild(cancelBtn);
         document.body.appendChild(scanDiv);
-        
+
+        let done = false;
         const stopScan = () => {
+          if (done) return;
+          done = true;
           stream.getTracks().forEach(t => t.stop());
           scanDiv.remove();
         };
         cancelBtn.addEventListener("click", stopScan);
-        
+
         const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d")!;
-        
-        const scanFrame = () => {
-          if (!scanDiv.parentNode) return;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          requestAnimationFrame(scanFrame);
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+        let frameCount = 0;
+
+        const decodeFrame = async () => {
+          if (done || !scanDiv.parentNode) return;
+          try {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            if (canvas.width > 0 && canvas.height > 0) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+              });
+              if (code && code.data && code.data.trim()) {
+                statusEl.textContent = "QR detected! Verifying...";
+                try {
+                  await api.scanQrCode(code.data.trim());
+                  await this.loadContacts();
+                  this.showToast("Contact added from QR");
+                  this.hideModal("qr-code-modal");
+                  stopScan();
+                  return;
+                } catch (err) {
+                  statusEl.textContent = "Invalid QR code — keep trying or paste data below";
+                }
+              } else {
+                statusEl.textContent = "Scanning...";
+              }
+            }
+          } catch {
+            // frame decode errors are transient
+          }
+
+          frameCount++;
+          // Throttle detection to every 3rd frame to save CPU
+          if (frameCount % 3 === 0) {
+            setTimeout(decodeFrame, 100);
+          } else {
+            requestAnimationFrame(decodeFrame);
+          }
         };
-        video.addEventListener("playing", () => scanFrame());
-        
+        video.addEventListener("playing", () => decodeFrame());
+
         // Also allow paste
         const pasteInput = document.createElement("input");
         pasteInput.placeholder = "Or paste QR data here";
@@ -906,7 +950,7 @@ class VchatApp {
           }, 100);
         });
         scanDiv.appendChild(pasteInput);
-        
+
       } catch (err) {
         console.error("Camera access failed:", err);
         this.showToast("Camera access denied");
@@ -920,17 +964,48 @@ class VchatApp {
       fileInput.addEventListener("change", async () => {
         const file = fileInput.files?.[0];
         if (!file) return;
-        const data = prompt("Paste the QR code data (text) from this image:");
-        if (data) {
+
+        const processImage = async (img: HTMLImageElement) => {
           try {
-            await api.scanQrCode(data.trim());
-            await this.loadContacts();
-            this.showToast("Contact added from QR");
-            this.hideModal("qr-code-modal");
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (!ctx) throw new Error("no-canvas");
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Try both normal and inverted orientations for robustness
+            let code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "attemptBoth",
+            });
+            if (code && code.data && code.data.trim()) {
+              try {
+                await api.scanQrCode(code.data.trim());
+                await this.loadContacts();
+                this.showToast("Contact added from QR");
+                this.hideModal("qr-code-modal");
+                return;
+              } catch (err) {
+                this.showToast("Invalid QR code in image");
+                return;
+              }
+            }
+            this.showToast("No QR code found in image");
           } catch (err) {
-            this.showToast("Invalid QR code data");
+            console.error("File QR decode failed:", err);
+            this.showToast("Could not decode image");
           }
-        }
+        };
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => processImage(img);
+          img.onerror = () => this.showToast("Could not read image");
+          img.src = reader.result as string;
+        };
+        reader.readAsDataURL(file);
       });
       fileInput.click();
     });
