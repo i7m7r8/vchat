@@ -2,6 +2,7 @@ pub mod hidden_service;
 
 use anyhow::Result;
 use arti_client::TorClient;
+use arti_client::config::TorClientConfigBuilder;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
@@ -67,12 +68,9 @@ pub async fn init_tor(handle: &tauri::AppHandle) -> Result<()> {
     );
     info!("Arti cache dir: {}", arti_cache_dir.display());
 
-    let config = arti_client::TorClientConfigBuilder::from_directories(
-        &arti_state_dir,
-        &arti_cache_dir,
-    )
-    .build()
-    .map_err(|e| anyhow::anyhow!("Arti config error: {e}"))?;
+    let config = TorClientConfigBuilder::from_directories(&arti_state_dir, &arti_cache_dir)
+        .build()
+        .map_err(|e| anyhow::anyhow!("Arti config error: {e}"))?;
 
     let client = TorClient::create_bootstrapped(config)
         .await
