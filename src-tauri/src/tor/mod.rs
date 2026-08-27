@@ -1,7 +1,7 @@
 pub mod hidden_service;
 
 use anyhow::Result;
-use arti_client::{TorClient, TorClientConfig};
+use arti_client::TorClient;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
@@ -10,9 +10,12 @@ use tokio::sync::RwLock;
 use tracing::info;
 use once_cell::sync::Lazy;
 
-pub type PeerStream = Box<dyn AsyncRead + AsyncWrite + Unpin + Send>;
+pub trait PeerStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> PeerStream for T {}
 
-static TOR_CLIENT: Lazy<Arc<RwLock<Option<Arc<TorClient>>>>> =
+type ArtiClient = TorClient<tor_rtcompat::PreferredRuntime>;
+
+static TOR_CLIENT: Lazy<Arc<RwLock<Option<Arc<ArtiClient>>>>> =
     Lazy::new(|| Arc::new(RwLock::new(None)));
 
 static TOR_STATE: Lazy<Arc<RwLock<TorState>>> =
@@ -39,7 +42,7 @@ pub struct CircuitInfo {
 pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
     info!("Initializing embedded Arti Tor client...");
 
-    let config = TorClientConfig::builder()
+    let config = arti_client::TorClientConfig::builder()
         .build()
         .map_err(|e| anyhow::anyhow!("Arti config error: {e}"))?;
 
@@ -101,7 +104,7 @@ pub async fn get_local_port() -> Option<u16> {
     tor_state.local_port
 }
 
-pub async fn connect_to_peer(onion_address: &str, port: u16) -> Result<PeerStream> {
+pub async fn connect_to_peer(onion_address: &str, port: u16) -> Result<Box<dyn PeerStream>> {
     let client_guard = TOR_CLIENT.read().await;
     let client = client_guard
         .as_ref()

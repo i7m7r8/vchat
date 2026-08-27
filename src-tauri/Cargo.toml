@@ -48,6 +48,7 @@ anyhow = "1"
 
 # Embedded Tor (Arti - pure Rust Tor implementation)
 arti-client = { version = "0.45", features = ["tokio", "rustls"] }
+tor-rtcompat = { version = "0.45", features = ["tokio", "rustls"] }
 
 # QR code generation
 qrcode = "0.14"
