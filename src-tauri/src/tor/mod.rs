@@ -5,6 +5,7 @@ use arti_client::TorClient;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Instant;
+use tauri::Manager;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::RwLock;
 use tracing::info;
@@ -39,12 +40,39 @@ pub struct CircuitInfo {
     pub exit_node: String,
 }
 
-pub async fn init_tor(_handle: &tauri::AppHandle) -> Result<()> {
+pub async fn init_tor(handle: &tauri::AppHandle) -> Result<()> {
     info!("Initializing embedded Arti Tor client...");
 
-    let config = arti_client::TorClientConfig::builder()
-        .build()
-        .map_err(|e| anyhow::anyhow!("Arti config error: {e}"))?;
+    let (data_dir, cache_dir) = match handle.path().app_data_dir() {
+        Ok(data_dir) => {
+            let cache_dir = handle
+                .path()
+                .app_cache_dir()
+                .unwrap_or_else(|_| data_dir.clone());
+            (data_dir, cache_dir)
+        }
+        Err(_) => (std::path::PathBuf::from("."), std::path::PathBuf::from(".")),
+    };
+
+    let arti_state_dir = data_dir.join("arti");
+    let arti_cache_dir = cache_dir.join("arti");
+    std::fs::create_dir_all(&arti_state_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create Arti state dir: {e}"))?;
+    std::fs::create_dir_all(&arti_cache_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create Arti cache dir: {e}"))?;
+
+    info!(
+        "Arti state dir: {}",
+        arti_state_dir.display()
+    );
+    info!("Arti cache dir: {}", arti_cache_dir.display());
+
+    let config = arti_client::TorClientConfigBuilder::from_directories(
+        &arti_state_dir,
+        &arti_cache_dir,
+    )
+    .build()
+    .map_err(|e| anyhow::anyhow!("Arti config error: {e}"))?;
 
     let client = TorClient::create_bootstrapped(config)
         .await

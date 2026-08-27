@@ -143,6 +143,21 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npx tauri android init
+      - name: Add Android runtime permissions to manifest
+        run: |
+          MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          echo "Adding runtime permissions to $MANIFEST"
+          add_perm() {
+            local perm="$1"
+            if ! grep -q "$perm" "$MANIFEST"; then
+              sed -i "s#<application#<uses-permission android:name=\"$perm\"/>\n    <application#" "$MANIFEST"
+            fi
+          }
+          add_perm "android.permission.CAMERA"
+          add_perm "android.permission.RECORD_AUDIO"
+          add_perm "android.permission.INTERNET"
+          echo "--- Manifest after modification ---"
+          cat "$MANIFEST"
       - name: Find NDK and build Android APK
         run: |
           NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | head -1)

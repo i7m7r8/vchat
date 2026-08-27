@@ -7,7 +7,7 @@ pub mod tor;
 pub mod webrtc;
 
 use tracing_subscriber::EnvFilter;
-
+use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -84,11 +84,19 @@ pub fn run() {
 
             // Initialize DB SYNCHRONOUSLY so all commands can use it immediately
             tauri::async_runtime::block_on(async {
-                match crypto::store::init_db().await {
-                    Ok(()) => tracing::info!("Database initialized"),
+                match app.path().app_data_dir() {
+                    Ok(data_dir) => {
+                        let db_path = data_dir.join("vchat.db");
+                        tracing::info!("Using database at {}", db_path.display());
+                        match crypto::store::init_db(&db_path).await {
+                            Ok(()) => tracing::info!("Database initialized"),
+                            Err(e) => {
+                                tracing::error!("Database init failed: {e}");
+                            }
+                        }
+                    }
                     Err(e) => {
-                        tracing::error!("Database init failed: {e}");
-                        panic!("Database init failed: {e}");
+                        tracing::error!("Failed to resolve app data directory: {e}");
                     }
                 }
             });

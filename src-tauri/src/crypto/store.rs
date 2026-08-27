@@ -11,8 +11,11 @@ use crate::commands::{Contact, Identity, Message, MessageType};
 
 pub(crate) static DB: Lazy<Arc<Mutex<Option<Connection>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
 
-pub async fn init_db() -> Result<()> {
-    let conn = Connection::open("vchat.db").context("Failed to open database")?;
+pub async fn init_db(db_path: &std::path::Path) -> Result<()> {
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent).context("Failed to create database directory")?;
+    }
+    let conn = Connection::open(db_path).context("Failed to open database")?;
     conn.execute_batch(
         "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;",
