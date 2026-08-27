@@ -579,21 +579,19 @@ pub async fn add_group_member(
             .collect(),
     };
 
-    if let Ok(signing_key) = crypto::load_signing_key().await {
-        if let Some(sk) = signing_key {
-            let sk_signing = sk.signing_key();
-            if let Ok(payload_bytes) = messaging::protocol::payload_to_json(&group_create_payload) {
-                if let Ok(wire_msg) = messaging::protocol::create_wire_message(
-                    &sk_signing,
-                    &sk.verifying_key,
-                    messaging::protocol::WireMessageType::GroupCreate,
-                    payload_bytes,
-                    uuid::Uuid::new_v4().to_string(),
-                    0,
-                ) {
-                    if let Ok(wire_bytes) = messaging::protocol::serialize_wire_message(&wire_msg) {
-                        messaging::try_send_wire(&onion_address, &wire_bytes).await;
-                    }
+    if let Ok(Some(sk)) = crypto::load_signing_key().await {
+        let sk_signing = sk.signing_key();
+        if let Ok(payload_bytes) = messaging::protocol::payload_to_json(&group_create_payload) {
+            if let Ok(wire_msg) = messaging::protocol::create_wire_message(
+                &sk_signing,
+                &sk.verifying_key,
+                messaging::protocol::WireMessageType::GroupCreate,
+                payload_bytes,
+                uuid::Uuid::new_v4().to_string(),
+                0,
+            ) {
+                if let Ok(wire_bytes) = messaging::protocol::serialize_wire_message(&wire_msg) {
+                    messaging::try_send_wire(&onion_address, &wire_bytes).await;
                 }
             }
         }
@@ -907,7 +905,7 @@ pub async fn send_file(
     };
 
     let chunk_size = 64 * 1024;
-    let chunks_total = ((file_bytes.len() + chunk_size - 1) / chunk_size) as u32;
+    let chunks_total = file_bytes.len().div_ceil(chunk_size) as u32;
 
     if let Err(e) = messaging::send_file_metadata(
         &recipient_onion,
