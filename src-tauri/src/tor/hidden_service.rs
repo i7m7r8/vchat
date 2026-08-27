@@ -161,6 +161,8 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
         WireMessageType::GroupCreate => handle_group_create(&wire_msg, &addr).await,
         WireMessageType::GroupMessage => handle_group_message(&wire_msg, &addr).await,
         WireMessageType::GroupUpdate => handle_group_update(&wire_msg, &addr).await,
+        WireMessageType::VoiceNote => handle_voice_note(&wire_msg, &addr).await,
+        WireMessageType::Forward => handle_forward(&wire_msg, &addr).await,
         _ => handle_default(&wire_msg, &addr).await,
     };
 
@@ -756,6 +758,96 @@ async fn handle_group_update(msg: &WireMessage, addr: &std::net::SocketAddr) -> 
         "GroupUpdate received from {addr}"
     );
 
+    build_ack_response(msg).await
+}
+
+async fn handle_voice_note(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: crate::messaging::protocol::VoiceNotePayload =
+        crate::messaging::protocol::payload_from_json(&msg.payload)?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+    let identity = crate::crypto::store::load_identity().await?
+        .ok_or_else(|| anyhow::anyhow!("Identity not initialized"))?;
+
+    let content = format!("[Voice note {}s]", payload.duration_secs);
+
+    let message = crate::commands::Message {
+        id: msg.message_id.clone(),
+        sender: sender_onion.clone(),
+        recipient: identity.onion_address,
+        content: content.clone(),
+        timestamp: msg.timestamp,
+        encrypted: true,
+        message_type: crate::commands::MessageType::File,
+        sequence_num: msg.sequence as i64,
+        reply_to: None,
+        delivered: false,
+        read: false,
+        expires_at: None,
+    };
+
+    crate::crypto::store::save_message(&message).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        let _ = app.emit("new-message", &message);
+        let _ = app.emit("notification", serde_json::json!({
+            "type": "message",
+            "title": "Voice message",
+            "body": format!("Voice note from {sender_onion}"),
+            "sender": sender_onion,
+        }));
+    }
+
+    if let Err(e) = crate::crypto::store::mark_messages_delivered_by_sender(&sender_onion).await {
+        warn!("Failed to mark delivered: {e}");
+    }
+
+    info!(from = %sender_onion, duration = payload.duration_secs, "VoiceNote received from {addr}");
+    build_ack_response(msg).await
+}
+
+async fn handle_forward(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: crate::messaging::protocol::ForwardPayload =
+        crate::messaging::protocol::payload_from_json(&msg.payload)?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+    let identity = crate::crypto::store::load_identity().await?
+        .ok_or_else(|| anyhow::anyhow!("Identity not initialized"))?;
+
+    let content = format!(">>> Forwarded from {}:\n{}", payload.original_sender, payload.original_content);
+
+    let message = crate::commands::Message {
+        id: msg.message_id.clone(),
+        sender: sender_onion.clone(),
+        recipient: identity.onion_address,
+        content: content.clone(),
+        timestamp: msg.timestamp,
+        encrypted: true,
+        message_type: crate::commands::MessageType::Text,
+        sequence_num: msg.sequence as i64,
+        reply_to: None,
+        delivered: false,
+        read: false,
+        expires_at: None,
+    };
+
+    crate::crypto::store::save_message(&message).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        let _ = app.emit("new-message", &message);
+        let _ = app.emit("notification", serde_json::json!({
+            "type": "message",
+            "title": "Forwarded message",
+            "body": format!("Forwarded message from {sender_onion}"),
+            "sender": sender_onion,
+        }));
+    }
+
+    if let Err(e) = crate::crypto::store::mark_messages_delivered_by_sender(&sender_onion).await {
+        warn!("Failed to mark delivered: {e}");
+    }
+
+    info!(from = %sender_onion, "Forward received from {addr}");
     build_ack_response(msg).await
 }
 

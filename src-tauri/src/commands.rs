@@ -585,7 +585,7 @@ pub async fn add_group_member(
             if let Ok(wire_msg) = messaging::protocol::create_wire_message(
                 &sk_signing,
                 &sk.verifying_key,
-                messaging::protocol::WireMessageType::GroupCreate,
+                messaging::protocol::WireMessageType::GroupUpdate,
                 payload_bytes,
                 uuid::Uuid::new_v4().to_string(),
                 0,
@@ -989,6 +989,97 @@ pub async fn get_file_transfers() -> Result<Vec<FileTransfer>, String> {
         .collect();
 
     Ok(transfers)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Voice Note commands
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub async fn send_voice_note(
+    recipient_onion: String,
+    file_data: String,
+    file_name: String,
+    mime_type: String,
+    duration_secs: f64,
+) -> Result<Message, String> {
+    let my_onion = get_identity_onion().await?;
+
+    let file_bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        &file_data,
+    )
+    .map_err(|e| format!("Invalid base64 file data: {e}"))?;
+
+    let file_id = uuid::Uuid::new_v4().to_string();
+    let mime = if mime_type.is_empty() {
+        "audio/ogg".to_string()
+    } else {
+        mime_type
+    };
+
+    messaging::send_voice_note(
+        &recipient_onion,
+        &file_id,
+        duration_secs,
+        &file_bytes,
+        &mime,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let timestamp = now_ts();
+    let msg_id = uuid::Uuid::new_v4().to_string();
+
+    store::save_message_with_encrypted(
+        &msg_id,
+        &my_onion,
+        &recipient_onion,
+        Some(&format!("[Voice Note: {file_name}]")),
+        None,
+        timestamp,
+        "voice_note",
+        "sent",
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(Message {
+        id: msg_id,
+        sender: my_onion,
+        recipient: recipient_onion,
+        content: format!("[Voice Note: {file_name}]"),
+        timestamp,
+        encrypted: false,
+        message_type: MessageType::VoiceNote,
+        sequence_num: 0,
+        reply_to: None,
+        delivered: false,
+        read: false,
+        expires_at: None,
+    })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Forward commands
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub async fn send_forward_message(
+    recipient_onion: String,
+    original_sender: String,
+    original_content: String,
+) -> Result<Message, String> {
+    messaging::send_forward(
+        &recipient_onion,
+        &original_sender,
+        &original_content,
+        "text",
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

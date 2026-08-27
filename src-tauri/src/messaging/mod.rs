@@ -8,9 +8,9 @@ use crate::crypto;
 use crate::crypto::store;
 use crate::messaging::protocol::{
     create_wire_message, payload_to_json, serialize_wire_message, DeliveryReceiptPayload,
-    FileChunkPayload, FileMetaPayload, GroupCreatePayload, GroupMemberInfo,
+    FileChunkPayload, FileMetaPayload, ForwardPayload, GroupCreatePayload, GroupMemberInfo,
     GroupMessagePayload, ReactionPayload, ReadReceiptPayload, TextPayload, TypingPayload,
-    WireMessageType,
+    VoiceNotePayload, WireMessageType,
 };
 use crate::error::audit_log;
 use tracing::{debug, info, warn};
@@ -334,6 +334,33 @@ pub async fn send_reaction(message_id: &str, emoji: &str) -> Result<Reaction> {
 pub async fn remove_reaction(message_id: &str, emoji: &str) -> Result<()> {
     let identity = load_identity_or_bail().await?;
     store::remove_reaction(message_id, &identity.onion_address, emoji).await?;
+
+    if let Some(peer_onion) = find_peer_for_message(message_id).await? {
+        let signing_key = load_signing_key_or_bail().await?;
+        let reaction_payload = ReactionPayload {
+            message_id: message_id.to_string(),
+            emoji: String::new(),
+        };
+        let payload_bytes = payload_to_json(&reaction_payload)?;
+
+        match create_wire_message(
+            &signing_key.signing_key(),
+            &signing_key.verifying_key,
+            WireMessageType::Reaction,
+            payload_bytes,
+            uuid::Uuid::new_v4().to_string(),
+            0,
+        ) {
+            Ok(wire_msg) => match serialize_wire_message(&wire_msg) {
+                Ok(wire_bytes) => try_send_wire(&peer_onion, &wire_bytes).await,
+                Err(e) => warn!("Failed to serialize reaction remove wire message: {e}"),
+            },
+            Err(e) => warn!("Failed to create reaction remove wire message: {e}"),
+        }
+    } else {
+        debug!("Could not resolve peer for message {message_id}, reaction removal stored locally only");
+    }
+
     audit_log(
         "reaction_removed",
         &format!("message={message_id}, emoji={emoji}"),
@@ -911,6 +938,121 @@ pub async fn send_file_chunk(
 
     try_send_wire(recipient_onion, &wire_bytes).await;
     Ok(())
+}
+
+// ── Voice Notes ─────────────────────────────────────────────────────────────
+
+pub async fn send_voice_note(
+    recipient_onion: &str,
+    file_id: &str,
+    duration_secs: f64,
+    data: &[u8],
+    mime_type: &str,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = VoiceNotePayload {
+        file_id: file_id.to_string(),
+        duration_secs,
+        data: data.to_vec(),
+        mime_type: mime_type.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::VoiceNote,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent voice note to {recipient_onion}: {file_id} ({duration_secs}s)");
+    Ok(())
+}
+
+// ── Forwards ────────────────────────────────────────────────────────────────
+
+pub async fn send_forward(
+    recipient_onion: &str,
+    original_sender: &str,
+    original_content: &str,
+    message_type: &str,
+) -> Result<Message> {
+    let identity = load_identity_or_bail().await?;
+    let signing_key = load_signing_key_or_bail().await?;
+    let static_secret = load_static_secret_or_bail().await?;
+
+    let contacts = store::load_contacts().await?;
+    let contact = find_contact(&contacts, recipient_onion)?;
+
+    let their_pub = resolve_contact_pubkey(contact)?;
+    let shared_key = crypto::derive_shared_key(&static_secret, &their_pub);
+
+    let forwarded_content = format!(">>> Forwarded from {original_sender}:\n{original_content}");
+    let encrypted = crypto::encrypt_message(&shared_key, forwarded_content.as_bytes())?;
+
+    let seq = store::get_message_count(recipient_onion).await? + 1;
+    let msg_id = uuid::Uuid::new_v4().to_string();
+
+    let text_payload = TextPayload {
+        content: hex::encode(&encrypted),
+        reply_to: None,
+    };
+    let payload_bytes = payload_to_json(&text_payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::Text,
+        payload_bytes,
+        msg_id.clone(),
+        seq as u64,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+
+    let timestamp = chrono::Utc::now().timestamp();
+
+    let message = Message {
+        id: msg_id,
+        sender: identity.onion_address.clone(),
+        recipient: recipient_onion.to_string(),
+        content: forwarded_content,
+        timestamp,
+        encrypted: true,
+        message_type: MessageType::Text,
+        sequence_num: seq,
+        reply_to: None,
+        delivered: false,
+        read: false,
+        expires_at: None,
+    };
+
+    store::save_message_with_encrypted(
+        &message.id,
+        &message.sender,
+        &message.recipient,
+        Some(&message.content),
+        Some(&encrypted),
+        message.timestamp,
+        "text",
+        "sent",
+        Some(message.sequence_num),
+        None,
+    )
+    .await?;
+
+    try_send_wire(recipient_onion, &wire_bytes).await;
+
+    audit_log(
+        "forward_sent",
+        &format!("to={recipient_onion}, from={original_sender}"),
+    );
+
+    Ok(message)
 }
 
 // ── Cleanup ─────────────────────────────────────────────────────────────────

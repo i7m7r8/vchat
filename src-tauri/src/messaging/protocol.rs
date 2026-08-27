@@ -30,6 +30,8 @@ pub enum WireMessageType {
     ProfileUpdate,
     GroupUpdate,
     Ack,
+    VoiceNote,
+    Forward,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,6 +179,21 @@ pub struct GroupAckPayloadInner {
     pub group_id: String,
     pub message_id: String,
     pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoiceNotePayload {
+    pub file_id: String,
+    pub duration_secs: f64,
+    pub data: Vec<u8>,
+    pub mime_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForwardPayload {
+    pub original_sender: String,
+    pub original_content: String,
+    pub message_type: String,
 }
 
 pub fn create_wire_message(

@@ -68,6 +68,8 @@ pub fn run() {
             commands::get_active_calls,
             commands::send_file,
             commands::get_file_transfers,
+            commands::send_voice_note,
+            commands::send_forward_message,
             commands::generate_qr_code,
             commands::scan_qr_code,
             commands::get_tor_status,

@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { api, Contact, Message, Identity, Group, GroupMessage, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
+import { api, Contact, Message, Identity, Group, GroupMessage, GroupMember, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
 import { store } from "./lib/store";
 
 class VchatApp {
@@ -11,6 +11,9 @@ class VchatApp {
   replyToMessage: Message | null = null;
   typingTimeout: any = null;
   contextMenuTarget: Message | null = null;
+  mediaRecorder: MediaRecorder | null = null;
+  audioChunks: Blob[] = [];
+  recordingStartTime: number = 0;
 
   async init(): Promise<void> {
     try {
@@ -43,6 +46,7 @@ class VchatApp {
     await this.loadContacts().catch((e) => console.warn("Contacts load:", e));
     await this.loadGroups().catch((e) => console.warn("Groups load:", e));
     await this.loadCallHistory().catch((e) => console.warn("Calls load:", e));
+    await this.loadSettings().catch((e) => console.warn("Settings load:", e));
     await this.updateTorStatus().catch((e) => console.warn("Tor status:", e));
 
     setInterval(() => this.updateTorStatus(), 30000);
@@ -127,6 +131,26 @@ class VchatApp {
       this.renderCallHistory(calls);
     } catch (err) {
       console.error("Failed to load call history:", err);
+    }
+  }
+
+  async loadSettings(): Promise<void> {
+    try {
+      const settings = await api.getSettings();
+      const toggleMap: Record<string, string> = {
+        disappearing_messages_default: "toggle-disappearing",
+        read_receipts: "toggle-read-receipts",
+        typing_indicators: "toggle-typing-indicators",
+        notifications_enabled: "toggle-notifications",
+      };
+      for (const [key, elId] of Object.entries(toggleMap)) {
+        const el = document.getElementById(elId) as HTMLInputElement | null;
+        if (el) el.checked = (settings as any)[key];
+      }
+      const themeSelect = document.getElementById("settings-theme") as HTMLSelectElement | null;
+      if (themeSelect) themeSelect.value = settings.theme;
+    } catch (err) {
+      console.error("Failed to load settings:", err);
     }
   }
 
@@ -420,8 +444,61 @@ class VchatApp {
       if (picker) picker.classList.toggle("hidden");
     });
 
-    document.getElementById("chat-voice-btn")?.addEventListener("click", () => {
-      this.showToast("Voice notes coming soon");
+    document.getElementById("chat-voice-btn")?.addEventListener("click", async () => {
+      if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+        this.mediaRecorder.stop();
+        return;
+      }
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.mediaRecorder = new MediaRecorder(stream);
+        this.audioChunks = [];
+        this.recordingStartTime = Date.now();
+        
+        const voiceBtn = document.getElementById("chat-voice-btn");
+        if (voiceBtn) voiceBtn.classList.add("recording");
+        
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) this.audioChunks.push(e.data);
+        };
+        
+        this.mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          if (voiceBtn) voiceBtn.classList.remove("recording");
+          
+          const duration = (Date.now() - this.recordingStartTime) / 1000;
+          const blob = new Blob(this.audioChunks, { type: "audio/webm" });
+          
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const base64 = (reader.result as string).split(",")[1] || "";
+              if (this.currentContact) {
+                await api.sendVoiceNote(
+                  this.currentContact.onion_address,
+                  base64,
+                  `voice-${Date.now()}.webm`,
+                  "audio/webm",
+                  duration
+                );
+                await this.loadMessages(this.currentContact.onion_address);
+                this.scrollToBottom();
+                this.showToast("Voice note sent");
+              }
+            } catch (err) {
+              console.error("Failed to send voice note:", err);
+              this.showToast("Failed to send voice note");
+            }
+          };
+          reader.readAsDataURL(blob);
+        };
+        
+        this.mediaRecorder.start();
+        this.showToast("Recording... tap mic to stop");
+      } catch (err) {
+        this.showToast("Microphone access denied");
+      }
     });
 
     document.getElementById("chat-header-area")?.addEventListener("click", () => {
@@ -772,11 +849,94 @@ class VchatApp {
     });
 
     document.getElementById("qr-scan-camera")?.addEventListener("click", async () => {
-      this.showToast("Camera QR scan coming soon");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.play();
+        
+        const scanDiv = document.createElement("div");
+        scanDiv.className = "qr-scan-overlay";
+        scanDiv.innerHTML = '<p>Point camera at QR code</p>';
+        scanDiv.appendChild(video);
+        
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.className = "btn btn-secondary";
+        scanDiv.appendChild(cancelBtn);
+        document.body.appendChild(scanDiv);
+        
+        const stopScan = () => {
+          stream.getTracks().forEach(t => t.stop());
+          scanDiv.remove();
+        };
+        cancelBtn.addEventListener("click", stopScan);
+        
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d")!;
+        
+        const scanFrame = () => {
+          if (!scanDiv.parentNode) return;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          const imageData = canvas.toDataURL("image/png");
+          
+          // Try to read QR via jsQR-like detection — fall back to manual paste
+          // For production, use a QR library. Here we provide a manual paste option.
+          requestAnimationFrame(scanFrame);
+        };
+        video.addEventListener("playing", () => scanFrame());
+        
+        // Also allow paste
+        const pasteInput = document.createElement("input");
+        pasteInput.placeholder = "Or paste QR data here";
+        pasteInput.className = "input";
+        pasteInput.style.marginTop = "8px";
+        pasteInput.addEventListener("paste", async () => {
+          setTimeout(async () => {
+            const data = pasteInput.value.trim();
+            if (data) {
+              try {
+                await api.scanQrCode(data);
+                await this.loadContacts();
+                this.showToast("Contact added from QR");
+                this.hideModal("qr-code-modal");
+                stopScan();
+              } catch (err) {
+                this.showToast("Invalid QR code");
+              }
+            }
+          }, 100);
+        });
+        scanDiv.appendChild(pasteInput);
+        
+      } catch (err) {
+        console.error("Camera access failed:", err);
+        this.showToast("Camera access denied");
+      }
     });
 
-    document.getElementById("qr-scan-file")?.addEventListener("click", async () => {
-      this.showToast("File QR scan coming soon");
+    document.getElementById("qr-scan-file")?.addEventListener("click", () => {
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = "image/*";
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files?.[0];
+        if (!file) return;
+        const data = prompt("Paste the QR code data (text) from this image:");
+        if (data) {
+          try {
+            await api.scanQrCode(data.trim());
+            await this.loadContacts();
+            this.showToast("Contact added from QR");
+            this.hideModal("qr-code-modal");
+          } catch (err) {
+            this.showToast("Invalid QR code data");
+          }
+        }
+      });
+      fileInput.click();
     });
 
     document.getElementById("edit-name-open")?.addEventListener("click", () => {
@@ -940,7 +1100,36 @@ class VchatApp {
 
   async startCall(video: boolean): Promise<void> {
     if (!this.currentContact) return;
-    this.showToast(video ? "Video calls coming soon" : "Voice calls coming soon");
+    try {
+      let callId: string;
+      if (video) {
+        callId = await api.startVideoCall(this.currentContact.onion_address);
+      } else {
+        callId = await api.startAudioCall(this.currentContact.onion_address);
+      }
+      this.activeCallId = callId;
+      this.callSeconds = 0;
+
+      const overlay = document.getElementById("call-overlay");
+      overlay?.classList.remove("hidden");
+
+      const nameEl = document.getElementById("call-peer-name");
+      if (nameEl) nameEl.textContent = this.currentContact.display_name;
+
+      const typeEl = document.getElementById("call-type-label");
+      if (typeEl) typeEl.textContent = video ? "Video Call" : "Voice Call";
+
+      this.callTimerInterval = setInterval(() => {
+        this.callSeconds++;
+        const timerEl = document.getElementById("call-timer");
+        if (timerEl) timerEl.textContent = this.formatDuration(this.callSeconds);
+      }, 1000);
+
+      this.showToast(`Calling ${this.currentContact.display_name}...`);
+    } catch (err) {
+      console.error("Failed to start call:", err);
+      this.showToast("Failed to start call");
+    }
   }
 
   async endCall(): Promise<void> {
@@ -1001,7 +1190,54 @@ class VchatApp {
     });
 
     document.getElementById("ctx-forward")?.addEventListener("click", () => {
-      this.showToast("Forward coming soon");
+      if (!this.contextMenuTarget) { this.hideContextMenu(); return; }
+
+      const contacts = store.getContacts();
+      if (contacts.length === 0) {
+        this.showToast("No contacts to forward to");
+        this.hideContextMenu();
+        return;
+      }
+
+      const forwardDiv = document.createElement("div");
+      forwardDiv.className = "modal-overlay";
+      forwardDiv.innerHTML = `
+        <div class="modal">
+          <div class="modal-header">
+            <h3>Forward message</h3>
+            <button class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="forward-contact-list">
+              ${contacts.map(c => `
+                <div class="forward-contact-item" data-onion="${this.esc(c.onion_address)}">
+                  <div class="avatar ${this.avatarColor(c.display_name)}">${c.display_name.charAt(0).toUpperCase()}</div>
+                  <span>${this.esc(c.display_name)}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>`;
+
+      forwardDiv.querySelector(".modal-close")?.addEventListener("click", () => forwardDiv.remove());
+      forwardDiv.addEventListener("click", (e) => { if (e.target === forwardDiv) forwardDiv.remove(); });
+
+      const msgToForward = this.contextMenuTarget;
+      forwardDiv.querySelectorAll(".forward-contact-item").forEach(el => {
+        el.addEventListener("click", async () => {
+          const onion = el.getAttribute("data-onion");
+          if (!onion || !msgToForward) return;
+          try {
+            await api.sendForwardMessage(onion, msgToForward.sender, msgToForward.content || "");
+            this.showToast("Message forwarded");
+            forwardDiv.remove();
+          } catch (err) {
+            this.showToast("Failed to forward message");
+          }
+        });
+      });
+
+      document.body.appendChild(forwardDiv);
       this.hideContextMenu();
     });
 
@@ -1111,6 +1347,14 @@ class VchatApp {
 
       if (this.currentContact) {
         await api.sendFile(this.currentContact.onion_address, fileData, fileName, mimeType);
+      } else if (this.currentGroup) {
+        const members = await api.getGroupMembers(this.currentGroup.id);
+        const identity = store.getIdentity();
+        for (const m of members) {
+          if (m.onion_address !== identity?.onion_address) {
+            await api.sendFile(m.onion_address, fileData, fileName, mimeType);
+          }
+        }
       }
       this.showToast("File sent");
       if (progressEl) progressEl.classList.add("hidden");
@@ -1162,6 +1406,62 @@ class VchatApp {
 
     listen("tor-status-changed", () => {
       this.updateTorStatus();
+    });
+
+    listen<{call_id: string, peer_onion: string, call_type: string}>("incoming-call", (event) => {
+      const { call_id, peer_onion, call_type } = event.payload;
+      this.activeCallId = call_id;
+
+      const overlay = document.getElementById("call-overlay");
+      overlay?.classList.remove("hidden");
+
+      const nameEl = document.getElementById("call-peer-name");
+      if (nameEl) nameEl.textContent = peer_onion.slice(0, 16);
+
+      const typeEl = document.getElementById("call-type-label");
+      if (typeEl) typeEl.textContent = `Incoming ${call_type} call`;
+
+      this.showToast(`Incoming ${call_type} call from ${peer_onion.slice(0, 16)}`);
+    });
+
+    listen("call-accepted", () => {
+      this.showToast("Call connected");
+    });
+
+    listen("call-rejected", () => {
+      this.showToast("Call rejected");
+      this.endCall();
+    });
+
+    listen("call-ended", () => {
+      this.showToast("Call ended");
+      this.endCall();
+    });
+
+    listen<any>("new-group-message", (event) => {
+      const msg = event.payload;
+      if (this.currentGroup && this.currentGroup.id === msg.group_id) {
+        const msgs = store.getGroupMessagesForGroup(msg.group_id);
+        msgs.push(msg);
+        store.setGroupMessagesForGroup(msg.group_id, msgs);
+        this.renderGroupMessages(msgs);
+        this.scrollToBottom();
+      }
+    });
+
+    listen<{peer_onion: string, is_typing: boolean}>("typing-indicator", (event) => {
+      const payload = event.payload;
+      if (this.currentContact && this.currentContact.onion_address === payload.peer_onion) {
+        const indicator = document.getElementById("chat-typing-indicator");
+        if (indicator) {
+          if (payload.is_typing) {
+            indicator.textContent = `${this.currentContact.display_name} is typing...`;
+            indicator.classList.remove("hidden");
+          } else {
+            indicator.classList.add("hidden");
+          }
+        }
+      }
     });
   }
 
@@ -1344,13 +1644,29 @@ class VchatApp {
     });
   }
 
-  private showGroupInfo(group: Group): void {
+  private async showGroupInfo(group: Group): Promise<void> {
     const nameEl = document.getElementById("group-info-name");
     const membersEl = document.getElementById("group-info-members");
     if (nameEl) nameEl.textContent = group.name;
-    if (membersEl) {
-      membersEl.innerHTML = `<div class="group-member"><span>${this.esc(group.created_by)}</span><span class="member-role">admin</span></div>`;
+
+    try {
+      const members = await api.getGroupMembers(group.id);
+      if (membersEl) {
+        membersEl.innerHTML = members.map((m: GroupMember) => `
+          <div class="group-member">
+            <div class="avatar avatar-small ${this.avatarColor(m.display_name || m.onion_address)}">${(m.display_name || '?').charAt(0).toUpperCase()}</div>
+            <span class="member-name">${this.esc(m.display_name || m.onion_address.slice(0, 16))}</span>
+            <span class="member-role">${m.role}</span>
+          </div>
+        `).join("");
+      }
+    } catch (err) {
+      console.error("Failed to load group members:", err);
+      if (membersEl) {
+        membersEl.innerHTML = `<div class="group-member"><span>${this.esc(group.created_by)}</span><span class="member-role">admin</span></div>`;
+      }
     }
+
     this.showModal("group-info-modal");
   }
 

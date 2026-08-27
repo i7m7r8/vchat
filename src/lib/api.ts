@@ -254,6 +254,14 @@ export const api = {
   getFileTransfers: (): Promise<FileTransfer[]> =>
     invoke("get_file_transfers"),
 
+  // ── Voice Notes ──────────────────────────────────────────────────────
+  sendVoiceNote: (recipientOnion: string, fileData: string, fileName: string, mimeType: string, durationSecs: number): Promise<Message> =>
+    invoke("send_voice_note", { recipientOnion, fileData, fileName, mimeType, durationSecs }),
+
+  // ── Forwards ─────────────────────────────────────────────────────────
+  sendForwardMessage: (recipientOnion: string, originalSender: string, originalContent: string): Promise<Message> =>
+    invoke("send_forward_message", { recipientOnion, originalSender, originalContent }),
+
   // ── QR ──────────────────────────────────────────────────────────────────
   generateQrCode: (): Promise<string> =>
     invoke("generate_qr_code"),
