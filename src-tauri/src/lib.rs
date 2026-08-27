@@ -101,13 +101,12 @@ pub fn run() {
 
             tauri::async_runtime::spawn(async move {
                 let cleanup_interval = std::time::Duration::from_secs(60);
-                let msg_max_age = 86400i64;
                 let typing_max_age = 300i64;
 
                 loop {
                     tokio::time::sleep(cleanup_interval).await;
 
-                    match crypto::store::cleanup_expired_messages(msg_max_age).await {
+                    match crypto::store::cleanup_expired_messages(0).await {
                         Ok(n) if n > 0 => tracing::info!("Cleaned up {n} expired messages"),
                         Err(e) => tracing::error!("Message cleanup failed: {e}"),
                         _ => {}

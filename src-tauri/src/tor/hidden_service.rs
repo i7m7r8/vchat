@@ -1,16 +1,21 @@
 use once_cell::sync::OnceCell;
-use sha2::{Digest, Sha512};
+use once_cell::sync::Lazy;
+use sha3::Sha3_256;
 use std::net::TcpListener as StdTcpListener;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::Emitter;
 use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
 use crate::messaging::protocol::{
     deserialize_wire_message, serialize_wire_message, CallInvitePayload, HeartbeatPayload,
-    TextPayload, WireMessage, WireMessageType,
+    TextPayload, TypingPayload, WireMessage, WireMessageType,
 };
 
 static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
+static APP_START_TIME: Lazy<AtomicU64> = Lazy::new(|| {
+    AtomicU64::new(chrono::Utc::now().timestamp() as u64)
+});
 
 pub fn set_app_handle(handle: tauri::AppHandle) {
     APP_HANDLE.set(handle).ok();
@@ -25,7 +30,7 @@ pub async fn generate_v3_onion_address() -> anyhow::Result<String> {
 }
 
 pub fn pubkey_to_v3_onion(pubkey_bytes: &[u8; 32]) -> String {
-    let mut version_hasher = Sha512::new();
+    let mut version_hasher = Sha3_256::new();
     version_hasher.update(pubkey_bytes);
     version_hasher.update([0x03u8]);
     let _version_hash = version_hasher.finalize();
@@ -35,7 +40,7 @@ pub fn pubkey_to_v3_onion(pubkey_bytes: &[u8; 32]) -> String {
     checksum_input.extend_from_slice(pubkey_bytes);
     checksum_input.push(0x03);
 
-    let mut checksum_hasher = Sha512::new();
+    let mut checksum_hasher = Sha3_256::new();
     checksum_hasher.update(&checksum_input);
     let checksum = checksum_hasher.finalize();
 
@@ -150,6 +155,12 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
         WireMessageType::Heartbeat => handle_heartbeat(&wire_msg, &addr).await,
         WireMessageType::FileMeta => handle_file_meta(&wire_msg, &addr).await,
         WireMessageType::FileChunk => handle_file_chunk(&wire_msg, &addr).await,
+        WireMessageType::Reaction => handle_reaction(&wire_msg, &addr).await,
+        WireMessageType::DeliveryReceipt => handle_delivery_receipt(&wire_msg, &addr).await,
+        WireMessageType::ReadReceipt => handle_read_receipt(&wire_msg, &addr).await,
+        WireMessageType::GroupCreate => handle_group_create(&wire_msg, &addr).await,
+        WireMessageType::GroupMessage => handle_group_message(&wire_msg, &addr).await,
+        WireMessageType::GroupUpdate => handle_group_update(&wire_msg, &addr).await,
         _ => handle_default(&wire_msg, &addr).await,
     };
 
@@ -200,7 +211,38 @@ async fn handle_text_message(msg: &WireMessage, addr: &std::net::SocketAddr) -> 
         if let Err(e) = app.emit("new-message", &message) {
             warn!("Failed to emit new-message event: {e}");
         }
+
+        if let Err(e) = app.emit("notification", serde_json::json!({
+            "type": "message",
+            "title": "New Message",
+            "body": &message.content[..message.content.len().min(100)],
+            "sender": sender_onion,
+        })) {
+            warn!("Failed to emit notification: {e}");
+        }
     }
+
+    if let Err(e) = crate::crypto::store::mark_messages_delivered_by_sender(&sender_onion).await {
+        warn!("Failed to mark delivered: {e}");
+    }
+
+    let signing_key = crate::crypto::load_signing_key().await?
+        .ok_or_else(|| anyhow::anyhow!("Signing key not available"))?;
+
+    let receipt_payload = crate::messaging::protocol::DeliveryReceiptPayload {
+        message_ids: vec![msg.message_id.clone()],
+    };
+    let receipt_bytes = crate::messaging::protocol::payload_to_json(&receipt_payload)?;
+    let receipt_wire = crate::messaging::protocol::create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::DeliveryReceipt,
+        receipt_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        msg.sequence + 1,
+    )?;
+    let receipt_wire_bytes = serialize_wire_message(&receipt_wire)?;
+    crate::messaging::try_send_wire(&sender_onion, &receipt_wire_bytes).await;
 
     info!(
         target: "vchat::messages",
@@ -217,31 +259,62 @@ async fn handle_call_invite(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
     let call_payload: CallInvitePayload = serde_json::from_slice(&msg.payload)
         .map_err(|e| anyhow::anyhow!("Invalid CallInvitePayload: {e}"))?;
 
+    let sender_onion = derive_sender_onion(msg)?;
+
+    crate::crypto::store::save_call_log(
+        &call_payload.call_id,
+        &sender_onion,
+        &format!("{:?}", call_payload.call_type).to_lowercase(),
+        "incoming",
+        chrono::Utc::now().timestamp(),
+        None,
+        None,
+        "ringing",
+    ).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("incoming-call", serde_json::json!({
+            "call_id": call_payload.call_id,
+            "caller_onion": sender_onion,
+            "call_type": format!("{:?}", call_payload.call_type).to_lowercase(),
+            "sdp_offer": call_payload.sdp_offer,
+        })) {
+            warn!("Failed to emit incoming-call: {e}");
+        }
+    }
+
     tracing::info!(
         target: "vchat::calls",
         call_id = %call_payload.call_id,
         call_type = ?call_payload.call_type,
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
         sequence = msg.sequence,
         "CallInvite received from {addr}"
     );
 
     crate::error::audit_log(
         "call_invite_received",
-        &format!(
-            "call_id={}, from={}",
-            call_payload.call_id,
-            hex::encode(&msg.sender_pubkey)
-        ),
+        &format!("call_id={}, from={}", call_payload.call_id, sender_onion),
     );
 
     build_ack_response(msg).await
 }
 
 async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("call-accepted", serde_json::json!({
+            "sender_onion": sender_onion,
+            "message_id": msg.message_id,
+        })) {
+            warn!("Failed to emit call-accepted: {e}");
+        }
+    }
+
     tracing::info!(
         target: "vchat::calls",
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
         sequence = msg.sequence,
         "CallAccept received from {addr}"
     );
@@ -250,9 +323,20 @@ async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 }
 
 async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("call-rejected", serde_json::json!({
+            "sender_onion": sender_onion,
+            "message_id": msg.message_id,
+        })) {
+            warn!("Failed to emit call-rejected: {e}");
+        }
+    }
+
     tracing::info!(
         target: "vchat::calls",
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
         sequence = msg.sequence,
         "CallReject received from {addr}"
     );
@@ -261,9 +345,20 @@ async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 }
 
 async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("call-ended", serde_json::json!({
+            "sender_onion": sender_onion,
+            "message_id": msg.message_id,
+        })) {
+            warn!("Failed to emit call-ended: {e}");
+        }
+    }
+
     tracing::info!(
         target: "vchat::calls",
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
         sequence = msg.sequence,
         "CallEnd received from {addr}"
     );
@@ -272,9 +367,30 @@ async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyh
 }
 
 async fn handle_typing_indicator(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
-    tracing::info!(
+    let payload: TypingPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid TypingPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if payload.is_typing {
+        if let Err(e) = crate::crypto::store::update_typing_indicator_received(&sender_onion).await {
+            warn!("Failed to store typing indicator: {e}");
+        }
+    }
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("typing-indicator", serde_json::json!({
+            "sender_onion": sender_onion,
+            "is_typing": payload.is_typing,
+        })) {
+            warn!("Failed to emit typing-indicator: {e}");
+        }
+    }
+
+    tracing::debug!(
         target: "vchat::typing",
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
+        is_typing = payload.is_typing,
         sequence = msg.sequence,
         "TypingIndicator received from {addr}"
     );
@@ -292,9 +408,11 @@ async fn handle_heartbeat(msg: &WireMessage, addr: &std::net::SocketAddr) -> any
         "Heartbeat from {addr}"
     );
 
+    let uptime = chrono::Utc::now().timestamp() as u64 - APP_START_TIME.load(Ordering::Relaxed);
+
     let heartbeat_response = HeartbeatPayload {
         relay_hint: None,
-        uptime_secs: 0,
+        uptime_secs: uptime,
         active_sessions: 1,
     };
     let payload_bytes = serde_json::to_vec(&heartbeat_response)?;
@@ -317,24 +435,325 @@ async fn handle_heartbeat(msg: &WireMessage, addr: &std::net::SocketAddr) -> any
 }
 
 async fn handle_file_meta(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::FileMetaPayload;
+
+    let meta: FileMetaPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid FileMetaPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    let identity = crate::crypto::store::load_identity().await?
+        .ok_or_else(|| anyhow::anyhow!("Identity not initialized"))?;
+
+    crate::crypto::store::save_file_transfer(
+        &meta.file_id,
+        &sender_onion,
+        &identity.onion_address,
+        &meta.filename,
+        Some(&meta.mime_type),
+        Some(meta.size as i64),
+        None,
+        None,
+        "receiving",
+    ).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("file-transfer-started", serde_json::json!({
+            "file_id": meta.file_id,
+            "sender_onion": sender_onion,
+            "filename": meta.filename,
+            "mime_type": meta.mime_type,
+            "size": meta.size,
+            "chunks_total": meta.chunks_total,
+            "sha256": meta.sha256,
+        })) {
+            warn!("Failed to emit file-transfer-started: {e}");
+        }
+    }
+
     tracing::info!(
         target: "vchat::files",
-        from = %hex::encode(&msg.sender_pubkey),
-        sequence = msg.sequence,
-        payload_size = msg.payload.len(),
+        from = %sender_onion,
+        file_id = %meta.file_id,
+        filename = %meta.filename,
+        size = meta.size,
         "FileMeta received from {addr}"
+    );
+
+    crate::error::audit_log(
+        "file_meta_received",
+        &format!("file_id={}, from={}, file={}", meta.file_id, sender_onion, meta.filename),
     );
 
     build_ack_response(msg).await
 }
 
 async fn handle_file_chunk(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::FileChunkPayload;
+
+    let chunk: FileChunkPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid FileChunkPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
     tracing::debug!(
         target: "vchat::files",
-        from = %hex::encode(&msg.sender_pubkey),
+        from = %sender_onion,
+        file_id = %chunk.file_id,
+        chunk_index = chunk.chunk_index,
+        chunk_size = chunk.data.len(),
         sequence = msg.sequence,
-        payload_size = msg.payload.len(),
         "FileChunk received from {addr}"
+    );
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("file-chunk-received", serde_json::json!({
+            "file_id": chunk.file_id,
+            "chunk_index": chunk.chunk_index,
+            "data": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &chunk.data),
+            "sender_onion": sender_onion,
+        })) {
+            warn!("Failed to emit file-chunk-received: {e}");
+        }
+    }
+
+    build_ack_response(msg).await
+}
+
+async fn handle_reaction(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::ReactionPayload;
+
+    let payload: ReactionPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid ReactionPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+    let reaction_id = msg.message_id.clone();
+
+    crate::crypto::store::save_reaction(
+        &reaction_id,
+        &payload.message_id,
+        &sender_onion,
+        &payload.emoji,
+    ).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("new-reaction", serde_json::json!({
+            "id": reaction_id,
+            "message_id": payload.message_id,
+            "sender": sender_onion,
+            "emoji": payload.emoji,
+        })) {
+            warn!("Failed to emit new-reaction: {e}");
+        }
+    }
+
+    tracing::info!(
+        target: "vchat::reactions",
+        from = %sender_onion,
+        message_id = %payload.message_id,
+        emoji = %payload.emoji,
+        "Reaction received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_delivery_receipt(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::DeliveryReceiptPayload;
+
+    let payload: DeliveryReceiptPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid DeliveryReceiptPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    for message_id in &payload.message_ids {
+        if let Err(e) = crate::crypto::store::mark_message_delivered(message_id).await {
+            warn!("Failed to mark message {message_id} delivered: {e}");
+        }
+    }
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("delivery-receipt", serde_json::json!({
+            "sender_onion": sender_onion,
+            "message_ids": payload.message_ids,
+        })) {
+            warn!("Failed to emit delivery-receipt: {e}");
+        }
+    }
+
+    tracing::debug!(
+        target: "vchat::receipts",
+        from = %sender_onion,
+        count = payload.message_ids.len(),
+        "DeliveryReceipt received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_read_receipt(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::ReadReceiptPayload;
+
+    let payload: ReadReceiptPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid ReadReceiptPayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    for message_id in &payload.message_ids {
+        if let Err(e) = crate::crypto::store::mark_message_read(message_id).await {
+            warn!("Failed to mark message {message_id} read: {e}");
+        }
+    }
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("read-receipt", serde_json::json!({
+            "sender_onion": sender_onion,
+            "message_ids": payload.message_ids,
+        })) {
+            warn!("Failed to emit read-receipt: {e}");
+        }
+    }
+
+    tracing::debug!(
+        target: "vchat::receipts",
+        from = %sender_onion,
+        count = payload.message_ids.len(),
+        "ReadReceipt received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_group_create(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::GroupCreatePayload;
+
+    let payload: GroupCreatePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid GroupCreatePayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    crate::crypto::store::save_group(
+        &payload.group_id,
+        &payload.name,
+        None,
+        None,
+        &sender_onion,
+    ).await?;
+
+    for member in &payload.members {
+        crate::crypto::store::add_group_member(
+            &payload.group_id,
+            &member.onion_address,
+            Some(&member.public_key),
+            Some(&member.display_name),
+            &member.role,
+        ).await?;
+    }
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("group-created", serde_json::json!({
+            "group_id": payload.group_id,
+            "name": payload.name,
+            "created_by": sender_onion,
+        })) {
+            warn!("Failed to emit group-created: {e}");
+        }
+    }
+
+    tracing::info!(
+        target: "vchat::groups",
+        group_id = %payload.group_id,
+        name = %payload.name,
+        from = %sender_onion,
+        "GroupCreate received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_group_message(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::GroupMessagePayload;
+
+    let payload: GroupMessagePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid GroupMessagePayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    let group_msg_id = uuid::Uuid::new_v4().to_string();
+
+    crate::crypto::store::save_group_message(
+        &group_msg_id,
+        &payload.group_id,
+        &sender_onion,
+        Some(&payload.content),
+        None,
+        msg.timestamp,
+        "text",
+        Some(msg.sequence as i64),
+        payload.reply_to.as_deref(),
+    ).await?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("new-group-message", serde_json::json!({
+            "id": group_msg_id,
+            "group_id": payload.group_id,
+            "sender": sender_onion,
+            "content": payload.content,
+            "timestamp": msg.timestamp,
+            "message_type": "text",
+            "reply_to": payload.reply_to,
+        })) {
+            warn!("Failed to emit new-group-message: {e}");
+        }
+    }
+
+    tracing::info!(
+        target: "vchat::groups",
+        group_id = %payload.group_id,
+        from = %sender_onion,
+        "GroupMessage received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_group_update(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    use crate::messaging::protocol::GroupUpdatePayload;
+
+    let payload: GroupUpdatePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid GroupUpdatePayload: {e}"))?;
+
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if payload.update_type == "member_added" {
+        if let Some(onion) = payload.data.get("onion_address").and_then(|v| v.as_str()) {
+            let pk = payload.data.get("public_key").and_then(|v| v.as_str()).unwrap_or("");
+            let name = payload.data.get("display_name").and_then(|v| v.as_str()).unwrap_or("");
+            let _ = crate::crypto::store::add_group_member(&payload.group_id, onion, Some(pk), Some(name), "member").await;
+        }
+    } else if payload.update_type == "member_removed" {
+        if let Some(onion) = payload.data.get("onion_address").and_then(|v| v.as_str()) {
+            let _ = crate::crypto::store::remove_group_member(&payload.group_id, onion).await;
+        }
+    }
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("group-updated", serde_json::json!({
+            "group_id": payload.group_id,
+            "update_type": payload.update_type,
+            "data": payload.data,
+            "sender": sender_onion,
+        })) {
+            warn!("Failed to emit group-updated: {e}");
+        }
+    }
+
+    tracing::info!(
+        target: "vchat::groups",
+        group_id = %payload.group_id,
+        update_type = %payload.update_type,
+        from = %sender_onion,
+        "GroupUpdate received from {addr}"
     );
 
     build_ack_response(msg).await

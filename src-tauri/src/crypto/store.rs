@@ -1079,7 +1079,10 @@ pub async fn cleanup_expired_messages(max_age_secs: i64) -> Result<usize> {
     let conn = db.as_ref().context("Database not initialized")?;
     let cutoff = Utc::now().timestamp() - max_age_secs;
     let deleted = conn
-        .execute("DELETE FROM messages WHERE timestamp < ?1", params![cutoff])
+        .execute(
+            "DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at > 0 AND expires_at < ?1",
+            params![cutoff],
+        )
         .context("Failed to cleanup expired messages")?;
     Ok(deleted)
 }
@@ -1092,4 +1095,42 @@ pub async fn cleanup_typing_indicators(max_age_secs: i64) -> Result<usize> {
         .execute("DELETE FROM typing_indicators WHERE last_typing_at < ?1", params![cutoff])
         .context("Failed to cleanup typing indicators")?;
     Ok(deleted)
+}
+
+pub async fn update_typing_indicator_received(peer_onion: &str) -> Result<()> {
+    let db = DB.lock().await;
+    let conn = db.as_ref().context("Database not initialized")?;
+    let now = Utc::now().timestamp();
+    conn.execute(
+        "INSERT OR REPLACE INTO typing_indicators (peer_onion, last_typing_at) VALUES (?1, ?2)",
+        params![peer_onion, now],
+    )
+    .context("Failed to update typing indicator received")?;
+    Ok(())
+}
+
+pub async fn mark_messages_delivered_by_sender(sender: &str) -> Result<usize> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
+    let db = DB.lock().await;
+    let conn = db.as_ref().context("Database not initialized")?;
+    let updated = conn
+        .execute(
+            "UPDATE messages SET delivered = 1 WHERE sender = ?1 AND recipient = ?2 AND delivered = 0",
+            params![sender, identity],
+        )
+        .context("Failed to mark messages delivered")?;
+    Ok(updated)
+}
+
+pub async fn mark_messages_read_by_sender(sender: &str) -> Result<usize> {
+    let identity = load_identity().await?.map(|i| i.onion_address).unwrap_or_default();
+    let db = DB.lock().await;
+    let conn = db.as_ref().context("Database not initialized")?;
+    let updated = conn
+        .execute(
+            "UPDATE messages SET read = 1 WHERE sender = ?1 AND recipient = ?2 AND read = 0",
+            params![sender, identity],
+        )
+        .context("Failed to mark messages read by sender")?;
+    Ok(updated)
 }

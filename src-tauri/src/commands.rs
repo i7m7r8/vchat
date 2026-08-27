@@ -392,11 +392,19 @@ pub async fn mark_messages_read(contact_onion: String) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    for msg in db_messages {
+    let mut read_ids = Vec::new();
+    for msg in &db_messages {
         if msg.sender == contact_onion && msg.recipient == my_onion {
             store::mark_message_read(&msg.id)
                 .await
                 .map_err(|e| e.to_string())?;
+            read_ids.push(msg.id.clone());
+        }
+    }
+
+    if !read_ids.is_empty() {
+        if let Err(e) = messaging::send_read_receipt(&contact_onion, &read_ids).await {
+            tracing::warn!("Failed to send read receipt over wire: {e}");
         }
     }
     Ok(())
@@ -420,48 +428,23 @@ pub async fn set_disappearing_message(message_id: String, ttl_secs: u64) -> Resu
 
 #[tauri::command]
 pub async fn add_reaction(message_id: String, emoji: String) -> Result<Reaction, String> {
-    let my_onion = get_identity_onion().await?;
-    let id = uuid::Uuid::new_v4().to_string();
-
-    store::save_reaction(&id, &message_id, &my_onion, &emoji)
+    messaging::send_reaction(&message_id, &emoji)
         .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(Reaction {
-        id,
-        message_id,
-        sender: my_onion,
-        emoji,
-        timestamp: now_ts(),
-    })
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn remove_reaction(message_id: String, emoji: String) -> Result<(), String> {
-    let my_onion = get_identity_onion().await?;
-    store::remove_reaction(&message_id, &my_onion, &emoji)
+    messaging::remove_reaction(&message_id, &emoji)
         .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn get_reactions(message_id: String) -> Result<Vec<Reaction>, String> {
-    let db_reactions = store::load_reactions(&message_id)
+    messaging::get_reactions(&message_id)
         .await
-        .map_err(|e| e.to_string())?;
-
-    let reactions = db_reactions
-        .into_iter()
-        .map(|(id, mid, sender, emoji, ts)| Reaction {
-            id,
-            message_id: mid,
-            sender,
-            emoji,
-            timestamp: ts,
-        })
-        .collect();
-    Ok(reactions)
+        .map_err(|e| e.to_string())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -474,6 +457,9 @@ pub async fn send_typing_indicator(peer_onion: String, is_typing: bool) -> Resul
         store::update_typing_indicator(&peer_onion)
             .await
             .map_err(|e| e.to_string())?;
+    }
+    if let Err(e) = messaging::send_typing_indicator(&peer_onion, is_typing).await {
+        tracing::warn!("Failed to send typing indicator over wire: {e}");
     }
     crate::error::audit_log(
         "typing_indicator",
@@ -504,28 +490,15 @@ pub async fn get_typing_status(peer_onion: String) -> Result<TypingStatus, Strin
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub async fn create_group(name: String, description: String) -> Result<Group, String> {
-    let my_onion = get_identity_onion().await?;
-    let group_id = uuid::Uuid::new_v4().to_string();
-
-    store::save_group(&group_id, &name, Some(&description), None, &my_onion)
+pub async fn create_group(
+    name: String,
+    description: String,
+    members: Option<Vec<String>>,
+) -> Result<Group, String> {
+    let member_onions = members.unwrap_or_default();
+    messaging::create_group(&name, Some(&description), &member_onions)
         .await
-        .map_err(|e| e.to_string())?;
-
-    store::add_group_member(&group_id, &my_onion, None, None, "admin")
-        .await
-        .map_err(|e| e.to_string())?;
-
-    crate::error::audit_log("group_created", &format!("id={group_id}, name={name}"));
-
-    Ok(Group {
-        id: group_id,
-        name,
-        description,
-        created_by: my_onion,
-        created_at: now_ts(),
-        member_count: 1,
-    })
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -586,6 +559,46 @@ pub async fn add_group_member(
         .await
         .map_err(|e| e.to_string())?;
 
+    let members = store::load_group_members(&group_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let group_create_payload = messaging::protocol::GroupCreatePayload {
+        group_id: group_id.clone(),
+        name: format!("Group {group_id}"),
+        members: members
+            .iter()
+            .map(|(_gid, onion, pk, dn, role, _joined)| {
+                messaging::protocol::GroupMemberInfo {
+                    onion_address: onion.clone(),
+                    public_key: pk.clone().unwrap_or_default(),
+                    display_name: dn.clone().unwrap_or_default(),
+                    role: role.clone(),
+                }
+            })
+            .collect(),
+    };
+
+    if let Ok(signing_key) = crypto::load_signing_key().await {
+        if let Some(sk) = signing_key {
+            let sk_signing = sk.signing_key();
+            if let Ok(payload_bytes) = messaging::protocol::payload_to_json(&group_create_payload) {
+                if let Ok(wire_msg) = messaging::protocol::create_wire_message(
+                    &sk_signing,
+                    &sk.verifying_key,
+                    messaging::protocol::WireMessageType::GroupCreate,
+                    payload_bytes,
+                    uuid::Uuid::new_v4().to_string(),
+                    0,
+                ) {
+                    if let Ok(wire_bytes) = messaging::protocol::serialize_wire_message(&wire_msg) {
+                        messaging::try_send_wire(&onion_address, &wire_bytes).await;
+                    }
+                }
+            }
+        }
+    }
+
     crate::error::audit_log(
         "group_member_added",
         &format!("group={group_id}, onion={onion_address}"),
@@ -621,38 +634,9 @@ pub async fn send_group_message(
     content: String,
     message_type: MessageType,
 ) -> Result<GroupMessage, String> {
-    let my_onion = get_identity_onion().await?;
-    let msg_id = uuid::Uuid::new_v4().to_string();
-    let ts = now_ts();
-
-    store::save_group_message(
-        &msg_id,
-        &group_id,
-        &my_onion,
-        Some(&content),
-        None,
-        ts,
-        message_type.as_str(),
-        None,
-        None,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    crate::error::audit_log(
-        "group_message_sent",
-        &format!("group={group_id}, type={}", message_type.as_str()),
-    );
-
-    Ok(GroupMessage {
-        id: msg_id,
-        group_id,
-        sender: my_onion,
-        content,
-        timestamp: ts,
-        message_type,
-        reply_to: None,
-    })
+    messaging::send_group_message(&group_id, &content, message_type)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -894,8 +878,13 @@ pub async fn send_file(
         mime_type
     };
 
-    let size = (file_data.len() * 3 / 4) as i64;
+    let file_bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        &file_data,
+    )
+    .map_err(|e| format!("Invalid base64 file data: {e}"))?;
 
+    let size = file_bytes.len() as i64;
     let transfer_id = uuid::Uuid::new_v4().to_string();
 
     store::save_file_transfer(
@@ -912,9 +901,57 @@ pub async fn send_file(
     .await
     .map_err(|e| e.to_string())?;
 
+    let sha256 = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&file_bytes))
+    };
+
+    let chunk_size = 64 * 1024;
+    let chunks_total = ((file_bytes.len() + chunk_size - 1) / chunk_size) as u32;
+
+    if let Err(e) = messaging::send_file_metadata(
+        &recipient_onion,
+        &transfer_id,
+        &filename,
+        &mime,
+        file_bytes.len() as u64,
+        chunks_total,
+        &sha256,
+    )
+    .await
+    {
+        tracing::warn!("Failed to send file metadata over wire: {e}");
+    }
+
+    let mut send_err = None;
+    for (idx, chunk) in file_bytes.chunks(chunk_size).enumerate() {
+        if let Err(e) = messaging::send_file_chunk(
+            &recipient_onion,
+            &transfer_id,
+            idx as u32,
+            chunk,
+        )
+        .await
+        {
+            send_err = Some(e.to_string());
+            tracing::warn!("Failed to send file chunk {idx}: {e}");
+            break;
+        }
+    }
+
+    let status = if send_err.is_some() {
+        "failed"
+    } else {
+        "completed"
+    };
+
+    store::update_file_transfer_status(&transfer_id, status)
+        .await
+        .map_err(|e| e.to_string())?;
+
     crate::error::audit_log(
         "file_transfer_started",
-        &format!("id={transfer_id}, to={recipient_onion}, file={filename}"),
+        &format!("id={transfer_id}, to={recipient_onion}, file={filename}, chunks={chunks_total}"),
     );
 
     Ok(FileTransfer {
@@ -924,9 +961,9 @@ pub async fn send_file(
         filename,
         mime_type: mime,
         size,
-        status: "transferring".to_string(),
+        status: status.to_string(),
         started_at: now_ts(),
-        completed_at: None,
+        completed_at: if status == "completed" { Some(now_ts()) } else { None },
     })
 }
 

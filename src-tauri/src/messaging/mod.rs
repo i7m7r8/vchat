@@ -8,8 +8,9 @@ use crate::crypto;
 use crate::crypto::store;
 use crate::messaging::protocol::{
     create_wire_message, payload_to_json, serialize_wire_message, DeliveryReceiptPayload,
-    GroupCreatePayload, GroupMemberInfo, GroupMessagePayload, ReactionPayload,
-    ReadReceiptPayload, TextPayload, TypingPayload, WireMessageType,
+    FileChunkPayload, FileMetaPayload, GroupCreatePayload, GroupMemberInfo,
+    GroupMessagePayload, ReactionPayload, ReadReceiptPayload, TextPayload, TypingPayload,
+    WireMessageType,
 };
 use crate::error::audit_log;
 use tracing::{debug, info, warn};
@@ -58,7 +59,7 @@ fn find_contact<'a>(contacts: &'a [Contact], onion: &str) -> Result<&'a Contact>
         .ok_or_else(|| anyhow::anyhow!("Contact not found: {onion}"))
 }
 
-async fn try_send_wire(onion: &str, wire_bytes: &[u8]) {
+pub async fn try_send_wire(onion: &str, wire_bytes: &[u8]) {
     match crate::tor::connect_to_peer(onion, 4433).await {
         Ok(mut stream) => {
             use tokio::io::AsyncWriteExt;
@@ -845,6 +846,71 @@ pub async fn get_file_transfers() -> Result<Vec<FileTransfer>> {
             },
         )
         .collect())
+}
+
+pub async fn send_file_metadata(
+    recipient_onion: &str,
+    file_id: &str,
+    filename: &str,
+    mime_type: &str,
+    size: u64,
+    chunks_total: u32,
+    sha256: &str,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = FileMetaPayload {
+        file_id: file_id.to_string(),
+        filename: filename.to_string(),
+        mime_type: mime_type.to_string(),
+        size,
+        chunks_total,
+        sha256: sha256.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::FileMeta,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent file metadata to {recipient_onion}: {filename} ({size} bytes, {chunks_total} chunks)");
+    Ok(())
+}
+
+pub async fn send_file_chunk(
+    recipient_onion: &str,
+    file_id: &str,
+    chunk_index: u32,
+    data: &[u8],
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = FileChunkPayload {
+        file_id: file_id.to_string(),
+        chunk_index,
+        data: data.to_vec(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::FileChunk,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    Ok(())
 }
 
 // ── Cleanup ─────────────────────────────────────────────────────────────────
