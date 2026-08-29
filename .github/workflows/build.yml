@@ -155,7 +155,7 @@ jobs:
       - name: Prepare Android project (deterministic manifest + versioning)
         run: bash scripts/android-prepare.sh
       - name: Build universal APK (all ABIs)
-        run: npx tauri android build --target aarch64,armv7,x86_64,i686 --apk
+        run: npx tauri android build --target aarch64 --target armv7 --target x86_64 --target i686 --apk
       - name: Inspect build output
         run: ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ 2>/dev/null || ls -R src-tauri/gen/android/app/build/outputs/apk/ | head -40
       - name: Sign release APK (requires keystore secrets)
@@ -197,6 +197,7 @@ jobs:
         run: |
           docker run --rm --entrypoint bash -e LC_ALL=C.UTF-8 -v "$PWD":/tmp/work \
             registry.gitlab.com/fdroid/fdroidserver:buildserver -lc '
+            source /etc/profile.d/bsenv.sh
             set -e
             cd /tmp/work
             mkdir -p /tmp/buildfdroid && cd /tmp/buildfdroid
