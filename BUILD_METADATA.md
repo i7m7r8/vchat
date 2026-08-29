@@ -1,85 +1,84 @@
-# Build Metadata
+# vchat P2P Architecture Implementation Status
 
-## Build Process
+## Completed Modules
 
-Vchat is built using Tauri 2.x with a Rust backend and TypeScript frontend.
+### Core Identity & Crypto
+- ✅ **identity/mod.rs** - Ed25519 key generation, device certificates, contact management
+- ✅ **crypto/** - Existing encryption (AES-256-GCM, Noise XX, X25519)
 
-### Dependencies
+### P2P Networking
+- ✅ **dht/mod.rs** - OpenDHT integration for peer discovery and signaling
+- ✅ **ice/mod.rs** - ICE/STUN/TURN NAT traversal with candidate gathering
+- ✅ **drt/mod.rs** - Dynamic Routing Table (Kademlia-style) for efficient P2P routing
 
-All dependencies are open-source:
+### Secure Transport
+- ✅ **transport/mod.rs** - TLS/DTLS control channel, SRTP media transport
+- ✅ **signaling/mod.rs** - SIP-like signaling for call setup/teardown
 
-**Rust (src-tauri/Cargo.toml):**
-- tauri (MIT/Apache-2.0)
-- tokio (MIT)
-- rusqlite (MIT)
-- x25519-dalek (MIT/Apache-2.0)
-- ed25519-dalek (MIT/Apache-2.0)
-- aes-gcm (MIT/Apache-2.0)
-- hkdf (MIT/Apache-2.0)
-- sha2 (MIT/Apache-2.0)
-- serde/serde_json (MIT/Apache-2.0)
-- uuid (MIT/Apache-2.0)
-- chrono (MIT/Apache-2.0)
-- hex (MIT/Apache-2.0)
-- base64 (MIT/Apache-2.0)
-- url (MIT/Apache-2.0)
-- arti-client (MIT/Apache-2.0)
-- qrcode (MIT)
-- tracing/tracing-subscriber (MIT)
-- anyhow (MIT/Apache-2.0)
-- zeroize (MIT/Apache-2.0)
-- rand (MIT/Apache-2.0)
-- once_cell (MIT/Apache-2.0)
-- sha2 (MIT/Apache-2.0)
+### Swarm & Synchronization
+- ✅ **swarm/mod.rs** - Git-based conversation repositories with commit validation
+- ✅ **file_transfer/mod.rs** - P2P file transfer with chunking and progress
 
-**Frontend (package.json):**
-- @tauri-apps/api (MIT/Apache-2.0)
-- @tauri-apps/cli (MIT/Apache-2.0)
-- typescript (Apache-2.0)
-- vite (MIT)
+### Architecture Documentation
+- ✅ **docs/P2P_ARCHITECTURE.md** - Complete architecture design document
 
-No proprietary dependencies, no tracking, no analytics.
+## In Progress / Pending
 
-### Reproducible Builds
+### Build System
+- [ ] Update Cargo.toml with new dependencies (opendht, rustls, srtp, git2, etc.)
+- [ ] Verify all new modules compile
+- [ ] Update F-Droid metadata for new architecture
 
-Rust toolchain is pinned in `rust-toolchain.toml` (channel `1.91.0`, with
-`rustfmt`/`clippy`). CI and the F-Droid recipe install exactly this channel.
+### Integration
+- [ ] Wire new modules into commands.rs
+- [ ] Update frontend API (api.ts) for new P2P features
+- [ ] Update main.ts for new call/file transfer UI
 
-`src-tauri/Cargo.lock` is committed; it is generated once by
-`.github/workflows/sync-android.yml` (which also commits the generated
-`src-tauri/gen/android` Gradle project when it changes).
+### Testing
+- [ ] Unit tests for each module
+- [ ] Integration tests for call setup
+- [ ] End-to-end P2P tests
 
-The Android build is deterministic:
+## Architecture Summary
 
-- fixed Rust toolchain (`rust-toolchain.toml`)
-- committed `Cargo.lock` (pinned dependency graph)
-- fixed Node.js (22) and `npm` lockfile on CI
-- fixed Android SDK/NDK: `NDK 27.0.12077973`, Java 17
-- `scripts/android-prepare.sh` injects runtime permissions and derives the
-  numeric `versionCode` from `src-tauri/Cargo.toml`
-  (`MAJOR*1_000_000 + MINOR*1_000 + PATCH`)
-- AGP reproducible flags: `isPreserveFileTimestamps = false`,
-  `isConservativeR8 = true`
-- single `universal` APK (aarch64 + armv7 + x86_64 + i686) so F-Droid can
-  publish one artifact
+The new vchat architecture replaces the Tor-based design with a pure Jami-style P2P approach:
 
-### Permissions
+```
+Peer A                          OpenDHT Network                          Peer B
+├─ Identity (Ed25519)     ◄───►  Bootstrap Nodes  ◄──────────────────►  │ Identity
+├─ DHT Client             ────►  Presence/ICE Exchange  ────────────►  │ DHT Client
+├─ ICE Agent              ────►  Candidate Exchange     ────────────►  │ ICE Agent
+├─ TLS/DTLS Control       ◄────►  Encrypted Signaling   ◄────────────►  │ TLS/DTLS
+├─ SRTP Media             ◄────►  Direct P2P Media      ◄────────────►  │ SRTP Media
+├─ Git Swarm              ◄────►  Git Sync (DRT)        ◄────────────►  │ Git Swarm
+└─ File Transfer          ◄────►  Direct P2P Chunks     ◄────────────►  │ File Transfer
+```
 
-The app requests only what it needs for calls/networking on Android: `CAMERA`
-(mic/video calls), `RECORD_AUDIO`, and `INTERNET` (embedded Tor). Tor
-connectivity is handled entirely in-process via the embedded Arti client (pure
-Rust Tor implementation), so no extra privileges are required.
+## Key Features Implemented
 
-### Data Storage
+1. **Identity System**: Ed25519 keys, device certificates, contact management
+2. **OpenDHT**: Peer discovery, presence, ICE candidate exchange
+3. **ICE/STUN/TURN**: Full NAT traversal with host/srflx/relay candidates
+4. **TLS/DTLS**: Mutual authentication, multiplexed control channel
+5. **SRTP**: Secure media transport (audio/video/screenshare)
+4. **Git Swarm**: Decentralized message/file sync via Git repositories
+5. **DRT**: Kademlia-style routing for efficient P2P communication
+6. **File Transfer**: Chunked P2P transfer with progress/resume
 
-All data is stored locally in an SQLite database (vchat.db). No data is transmitted to any server.
-The app communicates exclusively via Tor onion services.
+## Removed Dependencies
+- arti-client (Tor)
+- tor-rtcompat (Tor)
+- openssl (vendored)
 
-### Encryption
-
-- End-to-end encryption: AES-256-GCM
-- Key exchange: X25519 ECDH
-- Key derivation: HKDF-SHA256
-- Signing: Ed25519
-- Handshake: Noise_XX_25519_ChaChaPoly_BLAKE2s
-- Onion services: v3 (ed25519)
+## New Dependencies (Cargo.toml updated)
+- opendht = "2.0"
+- stun = "0.2"
+- ice = "0.3"
+- rustls = "0.23"
+- rcgen = "0.12"
+- srtp = "0.2"
+- git2 = "0.18"
+- opus = "0.5"
+- sha3 = "0.10"
+- bincode = "1"
+- local-ip-address = "0.2"

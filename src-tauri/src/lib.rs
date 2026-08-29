@@ -1,9 +1,16 @@
 pub mod base32;
 pub mod commands;
 pub mod crypto;
+pub mod dht;
+pub mod drt;
 pub mod error;
+pub mod file_transfer;
+pub mod identity;
+pub mod ice;
 pub mod messaging;
-pub mod tor;
+pub mod signaling;
+pub mod swarm;
+pub mod transport;
 pub mod webrtc;
 
 use tracing_subscriber::EnvFilter;
