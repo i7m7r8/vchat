@@ -243,7 +243,7 @@ fn now_ts() -> i64 {
 }
 
 async fn get_call_session(
-    state: SharedVchatState,
+    state: SharedWebRTCState,
     call_id: &str,
 ) -> Result<crate::webrtc::CallSession, String> {
     let sessions = webrtc::get_active_calls(state).await;
@@ -967,7 +967,6 @@ pub async fn send_media_frame(
 
 #[tauri::command]
 pub async fn send_ice_candidate(
-    state: State<'_, SharedVchatState>,
     call_id: String,
     peer_onion: String,
     candidate: String,
@@ -985,7 +984,7 @@ pub async fn set_relay_config(
     username: Option<String>,
     password: Option<String>,
 ) -> Result<(), String> {
-    let store_fn = |k: &str, v: Option<String>| async move {
+    let store_fn = |k: &str, v: Option<String>| async move -> Result<(), String> {
         match v {
             Some(val) => {
                 store::set_setting(k, &val).await.map_err(|e| e.to_string())?;

@@ -194,7 +194,7 @@ pub async fn establish_incoming_call(
     peer_onion: &str,
     call_type: CallType,
 ) -> Result<CallSession> {
-    let mut session = build_session(call_id, peer_onion, false, call_type);
+    let mut session = build_session(call_id, peer_onion, false, call_type.clone());
     if call_type == CallType::Audio {
         session.video_enabled = false;
     }
@@ -414,7 +414,7 @@ pub async fn cleanup_old_calls(state: SharedWebRTCState) -> Result<()> {
             };
             s.call_history.push(entry);
         }
-        s.media_sessions.remove(&id);
+        s.media_sessions.remove(id);
     }
 
     if !stale_ids.is_empty() {

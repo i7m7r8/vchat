@@ -386,7 +386,7 @@ async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyh
     build_ack_response(msg).await
 }
 
-async fn handle_voice_packet(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+async fn handle_voice_packet(msg: &WireMessage, _addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let payload: VoicePacketPayload = serde_json::from_slice(&msg.payload)
         .map_err(|e| anyhow::anyhow!("Invalid VoicePacketPayload: {e}"))?;
     let sender_onion = derive_sender_onion(msg)?;
@@ -407,7 +407,7 @@ async fn handle_voice_packet(msg: &WireMessage, addr: &std::net::SocketAddr) -> 
     build_ack_response(msg).await
 }
 
-async fn handle_video_frame(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+async fn handle_video_frame(msg: &WireMessage, _addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let payload: VideoFramePayload = serde_json::from_slice(&msg.payload)
         .map_err(|e| anyhow::anyhow!("Invalid VideoFramePayload: {e}"))?;
     let sender_onion = derive_sender_onion(msg)?;
@@ -428,7 +428,7 @@ async fn handle_video_frame(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
     build_ack_response(msg).await
 }
 
-async fn handle_screen_frame(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+async fn handle_screen_frame(msg: &WireMessage, _addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let payload: ScreenFramePayload = serde_json::from_slice(&msg.payload)
         .map_err(|e| anyhow::anyhow!("Invalid ScreenFramePayload: {e}"))?;
     let sender_onion = derive_sender_onion(msg)?;
