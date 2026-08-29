@@ -1,0 +1,29 @@
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android35-clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.armv7-linux-androideabi]
+linker = "armv7a-linux-androideabi35-clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-linux-android]
+linker = "x86_64-linux-android35-clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.i686-linux-android]
+linker = "i686-linux-android35-clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[build]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[env]
+OPENSSL_DIR = "/usr/local/ssl"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+strip = true
+panic = "abort"
+overflow-checks = true
