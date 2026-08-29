@@ -151,7 +151,6 @@ jobs:
       - name: Inspect build output
         run: ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ 2>/dev/null || ls -R src-tauri/gen/android/app/build/outputs/apk/ | head -40
       - name: Sign release APK (requires keystore secrets)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -159,6 +158,10 @@ jobs:
           ANDROID_KEYSTORE_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
         run: |
           set -e
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret configured; leaving APK debug-signed."
+            exit 0
+          fi
           SB="$ANDROID_HOME/build-tools"
           BT=$(ls "$SB" | sort -V | tail -1)
           APKSIGNER="$SB/$BT/apksigner"
