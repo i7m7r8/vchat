@@ -76,6 +76,14 @@ See [`docs/F-DROID.md`](docs/F-DROID.md) for the F-Droid publishing procedure,
 reproducible-build rationale and the submit recipe
 ([`fdroid/org.vchat.messenger.yml`](fdroid/org.vchat.messenger.yml)).
 
+## Roadmap
+
+See [`docs/MASTERPLAN.md`](docs/MASTERPLAN.md) for the detailed research-backed
+roadmap to a Jami-style serverless P2P + Signal-grade encryption messenger:
+X3DH + Double Ratchet, OpenDHT discovery, direct ICE/SRTP media, Git-based swarm
+groups, conference calls, and a modern Jami + Signal UI. All phases ship as
+CI-green increments built by GitHub Actions.
+
 ## License
 
 GPL-3.0-only

@@ -1,22 +1,28 @@
 pub mod base32;
 pub mod commands;
 pub mod crypto;
-pub mod dht;
 pub mod drt;
 pub mod error;
 pub mod file_transfer;
 pub mod identity;
-pub mod ice;
 pub mod messaging;
-pub mod signaling;
-pub mod swarm;
-pub mod transport;
+pub mod tor;
 pub mod webrtc;
 
-#[cfg(any(feature = "pqc-kyber", feature = "pqc-dilithium", feature = "pqc-sphincs"))]
-pub mod crypto {
-    pub mod pqc;
-}
+// Jami-style P2P modules. These have real native dependencies (OpenDHT,
+// libsrtp2, libgit2) that are only compiled when the `jami-p2p` feature is
+// enabled. The default, serverless build uses the pure-Rust Tor transport and
+// the hand-rolled STUN/ICE/UDP media path in `webrtc`.
+#[cfg(feature = "jami-p2p")]
+pub mod dht;
+#[cfg(feature = "jami-p2p")]
+pub mod ice;
+#[cfg(feature = "jami-p2p")]
+pub mod transport;
+#[cfg(feature = "jami-p2p")]
+pub mod signaling;
+#[cfg(feature = "jami-p2p")]
+pub mod swarm;
 
 use tracing_subscriber::EnvFilter;
 use tauri::Manager;

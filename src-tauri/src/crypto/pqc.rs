@@ -114,13 +114,12 @@ pub mod kyber {
         
         #[cfg(not(feature = "pqc-kyber"))]
         {
-            // Fallback: use ring for now, but mark as not PQC
-            use ring::kem::KEM;
-            let kem = ring::kem::X25519_HKDF_SHA256;
-            let mut rng = rand::rngs::OsRng;
-            let key_pair = kem.generate_key_pair(&mut rng)?;
-            pk[..32].copy_from_slice(key_pair.public_key.as_ref());
-            sk[..32].copy_from_slice(key_pair.private_key.as_ref());
+            // Fallback: X25519 (not PQC, keeps the build pure-Rust without ring).
+            use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519Secret};
+            let secret = X25519Secret::random_from_rng(OsRng);
+            let public = X25519PublicKey::from(&secret);
+            pk[..32].copy_from_slice(public.as_bytes());
+            sk[..32].copy_from_slice(secret.to_bytes().as_ref());
         }
 
         Ok((PublicKey(pk), SecretKey(sk)))
@@ -139,13 +138,14 @@ pub mod kyber {
 
         #[cfg(not(feature = "pqc-kyber"))]
         {
-            // Fallback to X25519
-            use ring::kem::KEM;
-            let kem = ring::kem::X25519_HKDF_SHA256;
-            let recipient_key = ring::kem::PublicKey::from(&pk.0[..32]);
-            let (ciphertext, shared_secret) = kem.encapsulate(&mut OsRng, &recipient_key)?;
-            ct[..ciphertext.len()].copy_from_slice(ciphertext.as_ref());
-            ss[..shared_secret.len()].copy_from_slice(shared_secret.as_ref());
+            // Fallback to X25519 (pure Rust, no ring).
+            use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
+            let recipient = X25519PublicKey::from(<[u8; 32]>::try_from(&pk.0[..32]).unwrap());
+            let ephemeral = EphemeralSecret::random_from_rng(OsRng);
+            let eph_pub = X25519PublicKey::from(&ephemeral);
+            let shared = ephemeral.diffie_hellman(&recipient);
+            ct[..32].copy_from_slice(eph_pub.as_bytes());
+            ss[..32].copy_from_slice(shared.as_bytes());
         }
 
         Ok((Ciphertext(ct), SharedSecret(ss)))
@@ -162,12 +162,12 @@ pub mod kyber {
 
         #[cfg(not(feature = "pqc-kyber"))]
         {
-            // Fallback to X25519
-            use ring::kem::KEM;
-            let kem = ring::kem::X25519_HKDF_SHA256;
-            let private_key = ring::kem::PrivateKey::from(&sk.0[..32]);
-            let shared_secret = kem.decapsulate(&private_key, &ct.0[..32])?;
-            ss[..shared_secret.len()].copy_from_slice(shared_secret.as_ref());
+            // Fallback to X25519 (pure Rust, no ring).
+            use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519Secret};
+            let eph_pub = X25519PublicKey::from(<[u8; 32]>::try_from(&ct.0[..32]).unwrap());
+            let secret = X25519Secret::from(<[u8; 32]>::try_from(&sk.0[..32]).unwrap());
+            let shared = secret.diffie_hellman(&eph_pub);
+            ss[..32].copy_from_slice(shared.as_bytes());
         }
 
         Ok(SharedSecret(ss))

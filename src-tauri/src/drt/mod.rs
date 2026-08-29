@@ -181,7 +181,7 @@ impl DrpClient {
             routing_table: routing_table.clone(),
             local_id,
             transport,
-            buckets: routing_table.read().unwrap().buckets.clone().into(),
+            buckets: Arc::new(RwLock::new(routing_table.read().unwrap().buckets.clone())),
         }
     }
 
