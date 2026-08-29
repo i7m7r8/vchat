@@ -508,7 +508,7 @@ fn spawn_media_receiver(
             let got: u32 = pieces.values().map(|p| p.len() as u32).sum();
             if got == *total {
                 let mut frame = Vec::with_capacity(*total as usize);
-                for (_off, piece) in pieces {
+                for piece in pieces.values() {
                     frame.extend_from_slice(piece);
                 }
                 partials.remove(&chunk.frame_id);
