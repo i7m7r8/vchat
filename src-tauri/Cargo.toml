@@ -20,7 +20,26 @@ tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Cryptography (military-grade)
+# Cryptography (military-grade + Post-Quantum)
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+ed25519-dalek = { version = "2", features = ["std", "rand_core"] }
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+sha3 = "0.10"
+snow = "0.10"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
+base64 = "0.22"
+
+# Post-Quantum Cryptography (NIST PQC Standards)
+# ML-KEM (Kyber), ML-DSA (Dilithium), SLH-DSA (SPHINCS+)
+pqc-kyber = { version = "0.5", optional = true, features = ["kyber768", "portable"] }
+pqc-dilithium = { version = "0.3", optional = true, features = ["dilithium3", "portable"] }
+pqc-sphincsplus = { version = "0.2", optional = true, features = ["shake256-128f", "portable"] }
+
+# Classical Cryptography (Hybrid PQC + Classical)
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 ed25519-dalek = { version = "2", features = ["std", "rand_core"] }
 aes-gcm = "0.10"
@@ -86,8 +105,14 @@ jni = { version = "0.21", features = ["invocation"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "fs"] }
 
 [features]
-default = ["custom-protocol"]
+default = ["custom-protocol", "pqc-hybrid"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Post-Quantum Cryptography Features
+pqc-kyber = ["pqc-kyber"]
+pqc-dilithium = ["pqc-dilithium"]
+pqc-sphincs = ["pqc-sphincsplus"]
+pqc-hybrid = ["pqc-kyber", "pqc-dilithium"]  # Hybrid PQC + Classical
 
 [profile.release]
 strip = true

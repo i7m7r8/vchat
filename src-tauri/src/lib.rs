@@ -13,6 +13,11 @@ pub mod swarm;
 pub mod transport;
 pub mod webrtc;
 
+#[cfg(any(feature = "pqc-kyber", feature = "pqc-dilithium", feature = "pqc-sphincs"))]
+pub mod crypto {
+    pub mod pqc;
+}
+
 use tracing_subscriber::EnvFilter;
 use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

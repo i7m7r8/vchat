@@ -1,5 +1,6 @@
 pub mod keys;
 pub mod noise;
+pub mod pqc;
 pub mod store;
 
 use aes_gcm::{
