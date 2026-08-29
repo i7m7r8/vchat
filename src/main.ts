@@ -767,7 +767,7 @@ class VchatApp {
   }
 
   private wireSettings(modal: HTMLElement): void {
-    Array.from(modal.querySelectorAll(".theme-opt")).forEach((b: HTMLElement) => b.addEventListener("click", async () => {
+    Array.from(modal.querySelectorAll<HTMLElement>(".theme-opt")).forEach((b) => b.addEventListener("click", async () => {
       const t = b.dataset.themeVal!;
       Array.from(modal.querySelectorAll(".theme-opt")).forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.theme = t;
@@ -775,7 +775,7 @@ class VchatApp {
       s.theme = t; this.state.settings = s;
       await api.updateSettings(s).catch(()=>{});
     }));
-    Array.from(modal.querySelectorAll(".density-opt")).forEach((b: HTMLElement) => b.addEventListener("click", async () => {
+    Array.from(modal.querySelectorAll<HTMLElement>(".density-opt")).forEach((b) => b.addEventListener("click", async () => {
       const d = b.dataset.densityVal!;
       Array.from(modal.querySelectorAll(".density-opt")).forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.density = d;
@@ -826,7 +826,7 @@ class VchatApp {
           const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
           if (code?.data) {
-            this.handleScannedQr(code.data, modal);
+            this.handleScannedQr(code.data);
             return;
           }
         }
@@ -847,7 +847,7 @@ class VchatApp {
           const ctx = canvas.getContext("2d")!;
           ctx.drawImage(img, 0, 0);
           const code = jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
-          if (code?.data) this.handleScannedQr(code.data, modal);
+          if (code?.data) this.handleScannedQr(code.data);
           else this.toast("No QR code found in image");
         };
         input.click();
@@ -860,7 +860,7 @@ class VchatApp {
     if (this.qrStream) { this.qrStream.getTracks().forEach(t => t.stop()); this.qrStream = null; }
   }
 
-  private handleScannedQr(data: string, modal: HTMLElement): void {
+  private handleScannedQr(data: string): void {
     this.stopQrScan();
     this.toast("QR scanned!");
     try {
