@@ -25,6 +25,7 @@ class VchatApp {
   incomingPeerOnion: string | null = null;
   activeCallPeerOnion: string | null = null;
   activeCallIsVideo: boolean = false;
+  screenStream: MediaStream | null = null;
   voiceQ: Blob[] = [];
   voicePlaying: boolean = false;
 
@@ -1367,14 +1368,16 @@ class VchatApp {
 
   async startScreenCapturing(): Promise<void> {
     try {
+      this.stopScreenCapturing();
       const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+      this.screenStream = screenStream;
       this.stopVideoStreaming();
       this.callVideoTimer = setInterval(() => {
         const callId = this.activeCallId;
         const peer = this.activeCallPeerOnion;
         if (!callId || !peer) return;
         const vidEl = document.createElement("video");
-        vidEl.srcObject = screenStream;
+        vidEl.srcObject = this.screenStream;
         vidEl.muted = true;
         vidEl.onloadedmetadata = () => {
           vidEl.play();
@@ -1400,6 +1403,16 @@ class VchatApp {
     }
   }
 
+  stopScreenCapturing(): void {
+    this.stopVideoStreaming();
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(t => t.stop());
+      this.screenStream = null;
+    }
+    const btn = document.getElementById("call-screen-btn");
+    btn?.classList.remove("active");
+  }
+
   stopVideoStreaming(): void {
     if (this.callVideoTimer) {
       clearInterval(this.callVideoTimer);
@@ -1420,6 +1433,7 @@ class VchatApp {
     // Stop media resources
     this.callMediaStream?.getTracks().forEach(t => t.stop());
     this.callMediaStream = null;
+    this.stopScreenCapturing();
     this.stopVideoStreaming();
     if (this.mediaRecorder) {
       try { this.mediaRecorder.stop(); } catch { /* ignore */ }
