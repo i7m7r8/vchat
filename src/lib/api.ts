@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
+function uint8ToBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
 export interface Identity {
   public_key: string;
   onion_address: string;
@@ -117,10 +121,14 @@ export interface AppSettings {
   typing_indicators: boolean;
   notifications_enabled: boolean;
   theme: string;
+  density?: string;
 }
 
 export const api = {
   // ── Identity ────────────────────────────────────────────────────────────
+  initDb: (): Promise<void> =>
+    invoke("init_db", {}).catch(() => {}),
+
   initIdentity: (displayName: string): Promise<Identity> =>
     invoke("init_identity", { displayName }),
 
@@ -263,25 +271,38 @@ export const api = {
     invoke("get_active_calls"),
 
   // ── Files ───────────────────────────────────────────────────────────────
-  sendFile: (recipientOnion: string, fileData: string, fileName: string, mimeType: string): Promise<FileTransfer> =>
-    invoke("send_file", { recipientOnion, fileData, fileName, mimeType }),
+  sendFile: (recipientOnion: string, fileName: string, data: Uint8Array, mimeType: string = "application/octet-stream"): Promise<FileTransfer> => {
+    const fileData = uint8ToBase64(data);
+    return invoke("send_file", { recipientOnion, fileName, mimeType, fileData });
+  },
 
   getFileTransfers: (): Promise<FileTransfer[]> =>
     invoke("get_file_transfers"),
 
   // ── Voice Notes ──────────────────────────────────────────────────────
-  sendVoiceNote: (recipientOnion: string, fileData: string, fileName: string, mimeType: string, durationSecs: number): Promise<Message> =>
-    invoke("send_voice_note", { recipientOnion, fileData, fileName, mimeType, durationSecs }),
+  sendVoiceNote: (recipientOnion: string, blob: Blob, durationSecs?: number): Promise<Message> => {
+    return blob.arrayBuffer().then(arrayBuffer => {
+      const fileName = `voice-${Date.now()}.webm`;
+      const fileData = uint8ToBase64(new Uint8Array(arrayBuffer));
+      return invoke("send_voice_note", { recipientOnion, fileData, fileName, mimeType: "audio/webm", durationSecs: durationSecs || 0 });
+    });
+  },
 
   // ── Forwards ─────────────────────────────────────────────────────────
   sendForwardMessage: (recipientOnion: string, originalSender: string, originalContent: string): Promise<Message> =>
     invoke("send_forward_message", { recipientOnion, originalSender, originalContent }),
 
   // ── QR ──────────────────────────────────────────────────────────────────
+  generateQRCode: (): Promise<string> =>
+    invoke("generate_qr_code"),
+
   generateQrCode: (): Promise<string> =>
     invoke("generate_qr_code"),
 
   scanQrCode: (qrData: string): Promise<Contact> =>
+    invoke("scan_qr_code", { qrData }),
+
+  parseAndAddQr: (qrData: string): Promise<Contact> =>
     invoke("scan_qr_code", { qrData }),
 
   // ── Tor ─────────────────────────────────────────────────────────────────

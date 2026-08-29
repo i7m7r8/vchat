@@ -1,2111 +1,974 @@
 import { listen } from "@tauri-apps/api/event";
 import jsQR from "jsqr";
-import { api, Contact, Message, Identity, Group, GroupMessage, GroupMember, Reaction, TypingStatus, CallLogEntry } from "./lib/api";
-import { store } from "./lib/store";
+import { api, Contact, Identity, Group, GroupMessage, Reaction, TypingStatus, CallLogEntry, FileTransfer, AppSettings, Message } from "./lib/api";
+
+/* ══════════════════════ HELPERS ══════════════════════ */
+
+const $ = (sel: string): HTMLElement | null => document.querySelector(sel);
+const $$ = (sel: string): NodeListOf<HTMLElement> => document.querySelectorAll(sel);
+const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c] as string));
+const timeFmt = (ts: number): string => {
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  if (startOfDay(d) === startOfDay(now)) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+};
+const dayFmt = (ts: number): string => {
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const yd = new Date(now); yd.setDate(now.getDate() - 1);
+  const startOfDay = (dt: Date) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  if (startOfDay(d) === startOfDay(now)) return "Today";
+  if (startOfDay(d) === startOfDay(yd)) return "Yesterday";
+  return d.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+};
+const fmtBytes = (n: number): string => {
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+  if (n < 1073741824) return `${(n/1048576).toFixed(1)} MB`;
+  return `${(n/1073741824).toFixed(1)} GB`;
+};
+const fmtDuration = (s: number): string => {
+  if (s < 60) return `${Math.floor(s)}s`;
+  const m = Math.floor(s/60); const r = Math.floor(s%60);
+  return `${m}m ${String(r).padStart(2,'0')}s`;
+};
+const avatarColor = (name: string): string => {
+  const colors = ["#6366f1","#8b5cf6","#a855f7","#ec4899","#f43f5e","#f97316","#f59e0b","#84cc16","#22c55e","#10b981","#14b8a6","#06b6d4","#0ea5e9","#3b82f6"];
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return colors[h % colors.length];
+};
+const initials = (name: string): string => name.split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+const shortOnion = (onion: string): string => onion && onion.length > 12 ? `${onion.slice(0,6)}…${onion.slice(-6)}` : onion;
+
+const escSVG = esc, S = {
+  icon(name: string, size = 20): string {
+    const paths: Record<string, string[]> = {
+      menu: ["M3 6h18M3 12h18M3 18h18"],
+      search: ["M21 21l-4.34-4.34","M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"],
+      plus: ["M12 5v14M5 12h14"],
+      back: ["M19 12H5","M12 19l-7-7 7-7"],
+      call: ["M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"],
+      video: ["m22 8-6 4 6 4V8Z","M2 6h14v12H2z"],
+      mic: ["M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z","M19 10v2a7 7 0 0 1-14 0v-2","M12 19v3"],
+      camoff: ["M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94","M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19","M1 1l22 22"],
+      screen: ["M2 3h20v14H2z","M8 21h8","M12 17v4"],
+      send: ["m22 2-7 20-4-9-9-4z","M22 2 11 13"],
+      attach: ["m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"],
+      settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z","M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"],
+      user: ["M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2","M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
+      camera: ["M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z","M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
+      qr: ["M3 7V5a2 2 0 0 1 2-2h2","M17 3h2a2 2 0 0 1 2 2v2","M21 17v2a2 2 0 0 1-2 2h-2","M7 21H5a2 2 0 0 1-2-2v-2","M7 12h10","M12 7v10"],
+      check: ["M20 6 9 17l-5-5"],
+      doublecheck: ["M18 7 9.87 15 6 11","M22 1.97 18 6 22 10"],
+      clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M12 6v6l4 2"],
+      download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
+      upload: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M17 8l-5-5-5 5","M12 3v12"],
+      close: ["M18 6 6 18","M6 6l12 12"],
+      dots: ["M5 12h.01M12 12h.01M19 12h.01"],
+      trash: ["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6","M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+      shield: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"],
+      lock: ["M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z","M7 11V7a5 5 0 0 1 10 0v4"],
+      globe: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M2 12h20","M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"],
+      share: ["M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8","M16 6l-4-4-4 4","M12 2v13"],
+      exit: ["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4","M16 17l5-5-5-5","M21 12H9"],
+      file: ["M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z","M13 2v7h7"],
+      image: ["M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z","M15 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2z","M3 17l5-5 4 4 3-3 6 6"],
+      send_file: ["M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4","M12 14V4","M8 8l4-4 4 4"],
+      play: ["M6 4l14 8-14 8z"],
+      pause: ["M6 4h4v16H6zM14 4h4v16h-4z"],
+      record: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M12 12v9"],
+      videooff: ["M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10","M1 1l22 22"],
+      groups: ["M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2","M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z","M23 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
+      emoji: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z","M8 14a4 4 0 0 0 8 0","M9 9h.01M15 9h.01"],
+      bolt: ["M13 2 3 14h9l-1 8 10-12h-9l1-8z"],
+      key: ["M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"],
+    };
+    const p = paths[name] ?? [];
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p.map(d=>`<path d="${escSVG(d)}"/>`).join('')}</svg>`;
+  },
+  avatar(name: string, size = 44, extra: string = "", online = false): string {
+    const color = avatarColor(name);
+    return `<div class="avatar${online?" online":""}" style="width:${size}px;height:${size}px;background:${color};font-size:${size*0.36}px" ${extra}>${esc(initials(name)||"?")}</div>`;
+  },
+};
+
+/* ══════════════════════ STATE ══════════════════════ */
+
+interface AppState {
+  identity: Identity | null;
+  contacts: Contact[];
+  groups: Group[];
+  messages: Map<string, Message[]>;
+  groupMessages: Map<string, GroupMessage[]>;
+  reactions: Map<string, Reaction[]>;
+  typing: Map<string, TypingStatus>;
+  callHistory: CallLogEntry[];
+  transfers: FileTransfer[];
+  settings: AppSettings | null;
+  activeFilter: string;
+  searchQuery: string;
+  currentContact: Contact | null;
+  currentGroup: Group | null;
+  activeCall: CallSessionView | null;
+  view: "chats" | "calls" | "settings";
+}
+
+interface CallSessionView {
+  id: string;
+  peer: string;
+  isVideo: boolean;
+  incoming: boolean;
+  started: number;
+  timerInterval?: ReturnType<typeof setInterval>;
+}
 
 class VchatApp {
-  currentContact: Contact | null = null;
-  currentGroup: Group | null = null;
-  activeCallId: string | null = null;
-  callTimerInterval: any = null;
-  callSeconds: number = 0;
-  replyToMessage: Message | null = null;
-  typingTimeout: any = null;
-  contextMenuTarget: Message | null = null;
-  mediaRecorder: MediaRecorder | null = null;
-  audioChunks: Blob[] = [];
-  recordingStartTime: number = 0;
-  callMediaStream: MediaStream | null = null;
-  callSeq: number = 0;
-  callVideoTimer: any = null;
-  remoteAudioCtx: AudioContext | null = null;
-  remoteVideoCanvas: HTMLCanvasElement | null = null;
-  remoteVideoCtx: CanvasRenderingContext2D | null = null;
-  isIncomingCall: boolean = false;
-  incomingPeerOnion: string | null = null;
-  activeCallPeerOnion: string | null = null;
-  activeCallIsVideo: boolean = false;
-  screenStream: MediaStream | null = null;
-  voiceQ: Blob[] = [];
-  voicePlaying: boolean = false;
+  state: AppState = {
+    identity: null, contacts: [], groups: [], messages: new Map(), groupMessages: new Map(),
+    reactions: new Map(), typing: new Map(), callHistory: [], transfers: [], settings: null,
+    activeFilter: "all", searchQuery: "", currentContact: null, currentGroup: null, activeCall: null,
+    view: "chats",
+  };
 
-  async init(): Promise<void> {
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+  private recordingStart: number = 0;
+  private typingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private replyTarget: Message | null = null;
+  private modalStack: HTMLElement[] = [];
+  private localVideoStream: MediaStream | null = null;
+
+  private qrStream: MediaStream | null = null;
+  private qrAnim: number | null = null;
+
+  constructor() {
+    this.setupListeners();
+    this.init();
+  }
+
+  /* ── Bootstrap ── */
+
+  private async init(): Promise<void> {
     try {
       await this.initDatabase();
-    } catch (err) {
-      console.warn("Database init check failed (retrying):", err);
-      await new Promise((r) => setTimeout(r, 500));
-      try {
-        await this.initDatabase();
-      } catch (err2) {
-        console.error("Database init failed permanently:", err2);
-      }
+    } catch (e) {
+      console.warn("DB init check failed, retrying…", e);
+      await new Promise(r => setTimeout(r, 600));
+      try { await this.initDatabase(); } catch (e2) { console.error("DB init failed:", e2); }
     }
-
-    // ALWAYS set up UI regardless of data loading status
-    this.setupNavigation();
-    this.setupChatView();
-    this.setupGroupChatView();
-    this.setupModals();
-    this.setupCallOverlay();
-    this.setupContextMenu();
-    this.setupEmojiPicker();
-    this.setupSearch();
     this.setupEventListeners();
-    this.setupSettings();
-    this.showScreen("chats");
-
-    // Load data — each is independent, failures are non-fatal
-    await this.loadIdentity().catch((e) => console.warn("Identity load:", e));
-    await this.loadContacts().catch((e) => console.warn("Contacts load:", e));
-    await this.loadGroups().catch((e) => console.warn("Groups load:", e));
-    await this.loadCallHistory().catch((e) => console.warn("Calls load:", e));
-    await this.loadSettings().catch((e) => console.warn("Settings load:", e));
-    await this.updateTorStatus().catch((e) => console.warn("Tor status:", e));
-
-    setInterval(() => this.updateTorStatus(), 30000);
-    setInterval(() => this.updateTypingIndicators(), 5000);
+    this.applyTheme();
+    await this.loadData();
+    this.render();
+    this.setupSocketListener();
   }
 
-  async initDatabase(): Promise<void> {
-    await api.getContacts();
+  private async initDatabase(): Promise<void> {
+    try { await api.initDb(); } catch (e) { console.warn("initDb warn:", e); }
   }
 
-  async loadIdentity(): Promise<void> {
-    try {
-      let identity: Identity | null = null;
-      try {
-        identity = await api.getIdentity();
-      } catch {
-        // command failed
+  private async loadData(): Promise<void> {
+    const tasks: Promise<any>[] = [
+      api.getIdentity().then(i => this.state.identity = i),
+      api.getContacts().then(c => this.state.contacts = c),
+      api.getGroups().then(g => this.state.groups = g),
+      api.getSettings().then(s => this.state.settings = s).catch(() => {}),
+    ];
+    try { await Promise.allSettled(tasks); } catch (e) { console.error(e); }
+    for (const c of this.state.contacts) {
+      api.getMessages(c.onion_address).then(ms => this.state.messages.set(c.onion_address, ms)).catch(() => {});
+    }
+  }
+
+  /* ── Event wiring ── */
+
+  private setupEventListeners(): void {
+    const $btn = (id: string, cb: () => void) => $(id)?.addEventListener("click", cb);
+    $btn("#btn-settings", () => this.showModal("settings"));
+    $btn("#btn-profile", () => this.showModal("profile"));
+    $btn("#btn-back", () => this.closeChat());
+    $btn("#btn-call", () => this.startCall(false));
+    $btn("#btn-video", () => this.startCall(true));
+    $btn("#btn-send", () => this.sendMessage());
+    $btn("#fab-new", () => this.showModal("new-chat"));
+    $btn("#fab-scan", () => this.showModal("qr-scan"));
+    $btn("#btn-attach", () => this.showModal("attach"));
+    $btn("#btn-voice-note", () => this.toggleVoiceNote());
+    $btn("#btn-chat-menu", () => this.showModal("chat-menu"));
+    $btn("#btn-start", () => this.showModal("new-chat"));
+
+    $("#composer")?.addEventListener("input", (e) => {
+      const ta = e.target as HTMLTextAreaElement;
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+      const $send = $("#btn-send"); if ($send) ($send as HTMLButtonElement).disabled = !ta.value.trim();
+      this.notifyTyping();
+    });
+    $("#composer")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
+    });
+    $("#search-input")?.addEventListener("input", (e) => {
+      this.state.searchQuery = (e.target as HTMLInputElement).value.trim();
+      this.renderChatList();
+    });
+    $$(".chip").forEach(ch => ch.addEventListener("click", () => {
+      $$(".chip").forEach(c => c.classList.remove("active"));
+      ch.classList.add("active");
+      this.state.activeFilter = ch.dataset.filter || "all";
+      this.renderChatList();
+    }));
+    $$(".nav-item").forEach(n => n.addEventListener("click", () => this.setView(n.dataset.nav as any)));
+  }
+
+  private setupSocketListener(): void {
+    listen("new-message", (e: any) => {
+      const msg = e.payload as Message;
+      const list = this.state.messages.get(msg.sender) || [];
+      list.push(msg); this.state.messages.set(msg.sender, list);
+      this.renderMessages();
+      this.renderChatList();
+      this.toast("New message from " + msg.sender.slice(0,6));
+    });
+    listen("incoming-call", (e: any) => {
+      this.showIncomingCall(e.payload);
+    });
+    listen("typing", (e: any) => {
+      const t = e.payload as TypingStatus;
+      this.state.typing.set(t.peer_onion, t);
+      this.updateChatSubtitle();
+    });
+    listen("message-delivered", (e: any) => { this.renderMessages(); });
+    listen("call-ended", (e: any) => { this.onCallEnded(e.payload); });
+    listen("file-transfer-update", (e: any) => { this.onTransferUpdate(e.payload); });
+    listen("tor-status", (e: any) => this.setConnStatus(e.payload));
+  }
+
+  /* ── Theme / UI prefs ── */
+
+  private applyTheme(): void {
+    const s = this.state.settings;
+    document.documentElement.dataset.theme = s?.theme || "dark";
+    document.documentElement.dataset.density = s?.density || "default";
+  }
+
+  private setConnStatus(status: string): void {
+    const el = $("#conn-status");
+    if (!el) return;
+    const label = status === "connected" ? "P2P online" : status === "connecting" ? "Connecting…" : "Offline";
+    el.textContent = label;
+    el.classList.toggle("online", status === "connected");
+    el.classList.toggle("offline", status === "offline");
+  }
+
+  /* ── Navigation ── */
+
+  private setView(view: "chats" | "calls" | "settings"): void {
+    this.state.view = view;
+    $$(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.nav === view));
+    $$("#screen-chat, #screen-welcome").forEach(el => el.classList.add("hidden"));
+    $(".list")!.style.display = view === "chats" ? "" : "none";
+    this.renderChatList();
+  }
+
+  private openChat(contact: Contact): void {
+    this.state.currentContact = contact;
+    this.state.currentGroup = null;
+    $("#screen-welcome")!.classList.add("hidden");
+    const chat = $("#screen-chat")!; chat.classList.remove("hidden");
+    $("#btn-back")!.style.display = window.innerWidth <= 900 ? "" : "none";
+    $("#chat-title")!.textContent = contact.display_name;
+    const av = $("#chat-avatar")!; av.innerHTML = S.avatar(contact.display_name, 44, "", false);
+    this.renderMessages();
+  }
+
+  private closeChat(): void {
+    this.state.currentContact = null;
+    this.state.currentGroup = null;
+    $("#screen-chat")!.classList.add("hidden");
+    $("#screen-welcome")!.classList.remove("hidden");
+    this.renderChatList();
+  }
+
+  /* ── RENDER ── */
+
+  private render(): void {
+    this.renderChatList();
+    this.renderMessages();
+  }
+
+  private renderChatList(): void {
+    const list = $("#chat-list");
+    if (!list) return;
+    const q = this.state.searchQuery.toLowerCase();
+    const filter = this.state.activeFilter;
+    const items: { key: string; label: string; sub: string; time: string; unread: number; online: boolean; type: string; onClick: () => void }[] = [];
+
+    for (const c of this.state.contacts) {
+      if (c.blocked) continue;
+      if (q && !c.display_name.toLowerCase().includes(q) && !c.onion_address.includes(q)) continue;
+      if (filter === "p2p" || filter === "all" || filter === "unread") {
+        const msgs = this.state.messages.get(c.onion_address) || [];
+        const last = msgs[msgs.length - 1];
+        const unread = msgs.filter(m => !m.read && m.sender === c.onion_address).length;
+        if (filter === "unread" && unread === 0) continue;
+        items.push({
+          key: c.id, label: c.display_name, sub: last ? last.content : "Tap to chat", time: last ? timeFmt(last.timestamp) : "",
+          unread, online: false, type: "dm", onClick: () => this.openChat(c),
+        });
       }
-      if (!identity) {
-        identity = await api.initIdentity("User");
+    }
+
+    for (const g of this.state.groups) {
+      if (q && !g.name.toLowerCase().includes(q)) continue;
+      if (filter === "groups" || filter === "all" || filter === "unread") {
+        items.push({ key: g.id, label: g.name, sub: `${g.member_count} members`, time: "", unread: 0, online: false, type: "group", onClick: () => this.openGroup(g) });
       }
-      if (identity) {
-        store.setIdentity(identity);
-        this.updateSettingsProfile(identity);
+    }
+
+    items.sort((a,b) => (b.unread - a.unread) || b.time.localeCompare(a.time));
+
+    if (items.length === 0) {
+      list.innerHTML = `<div class="empty"><div class="empty-card"><h3>${q ? "No results" : "No conversations"}</h3><p>${q ? "Try a different search." : "Add a contact to start chatting."}</p></div></div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(it => `
+      <div class="chat-row${it.unread ? " unread" : ""}${this.state.currentContact?.id === it.key || this.state.currentGroup?.id === it.key ? " active" : ""}" data-key="${esc(it.key)}">
+        ${S.avatar(it.label, 46, "", it.online)}
+        <div class="chat-meta">
+          <div class="chat-topline">
+            <span class="chat-title">${esc(it.label)}</span>
+            <span class="chat-time">${it.time}</span>
+          </div>
+          <div class="chat-preview">
+            <span class="chat-type ${it.type === "group" ? "groups" : ""}">${it.type === "group" ? S.icon("groups", 13) : S.icon("lock", 12)}</span>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.sub.split("\n")[0] || "⋯")}</span>
+            ${it.unread ? `<span class="badge">${it.unread}</span>` : ""}
+          </div>
+        </div>
+      </div>`).join("");
+
+    $$(".chat-row").forEach(row => row.addEventListener("click", () => {
+      const key = row.dataset.key!;
+      const item = items.find(i => i.key === key);
+      item?.onClick();
+    }));
+  }
+
+  private renderMessages(): void {
+    const box = $("#messages");
+    if (!box || !(this.state.currentContact || this.state.currentGroup)) return;
+    box.innerHTML = "";
+
+    let prevDay = "";
+    const contact = this.state.currentContact;
+    const messages = contact ? (this.state.messages.get(contact.onion_address) || []) : [];
+
+    for (const m of messages) {
+      const day = dayFmt(m.timestamp);
+      if (day !== prevDay) {
+        box.insertAdjacentHTML("beforeend", `<div class="day-sep">${esc(day)}</div>`);
+        prevDay = day;
       }
-    } catch (err) {
-      console.error("Failed to load identity:", err);
-    }
-  }
+      const sent = m.sender === this.state.identity?.onion_address || m.sender === "local" || (m.sender === this.state.identity?.public_key);
+      const ticks = m.read ? S.icon("doublecheck", 15) : m.delivered ? S.icon("check", 15) : S.icon("clock", 14);
 
-  updateSettingsProfile(identity: Identity): void {
-    const avatarEl = document.getElementById("settings-avatar");
-    const nameEl = document.getElementById("settings-name");
-    const onionEl = document.getElementById("settings-onion");
-    if (avatarEl) {
-      avatarEl.textContent = identity.display_name.charAt(0).toUpperCase();
-      avatarEl.className = `avatar avatar-large ${this.avatarColor(identity.display_name)}`;
-    }
-    if (nameEl) (nameEl as HTMLInputElement).value = identity.display_name;
-    if (onionEl) onionEl.textContent = identity.onion_address || "Not connected";
-  }
-
-  async updateTorStatus(): Promise<void> {
-    try {
-      const status = await api.getTorStatus();
-      const badge = document.getElementById("tor-status-badge");
-      if (badge) {
-        const connected = status.connected;
-        badge.className = `tor-badge tor-${connected ? "connected" : "disconnected"}`;
-        badge.textContent = connected ? "Tor Connected" : "Tor Offline";
+      let body = esc(m.content);
+      if (m.message_type === "file" || m.message_type === "image" || m.message_type === "video" || m.message_type === "audio" || m.message_type === "voice-note") {
+        body = this.renderAttachment(m);
       }
-    } catch (err) {
-      console.error("Tor status check failed:", err);
+
+      box.insertAdjacentHTML("beforeend", `
+        <div class="bubble-row ${sent ? "sent" : "recv"}" data-id="${esc(m.id)}">
+          <div class="bubble">
+            ${body}
+            <div class="bubble-meta">
+              ${timeFmt(m.timestamp)}
+              ${sent ? `<span class="ticks">${ticks}</span>` : ""}
+            </div>
+          </div>
+        </div>`);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  private renderAttachment(m: Message): string {
+    const isImg = m.message_type === "image";
+    const isFile = m.message_type === "file";
+    const isVoice = m.message_type === "voice-note";
+    if (isImg) return `<img src="${esc(m.content)}" style="max-width:260px;max-height:220px;border-radius:10px;display:block"/>`;
+    if (isVoice) return `
+      <div style="display:flex;align-items:center;gap:8px;min-width:180px">
+        <button class="icon-btn" style="flex-shrink:0">${S.icon("play", 18)}</button>
+        <div style="flex:1;height:4px;background:rgba(128,128,128,.3);border-radius:2px"><div style="width:35%;height:100%;background:currentColor;border-radius:2px"></div></div>
+        <span style="font-size:11px;opacity:.8">0:07</span>
+      </div>`;
+    if (isFile) return `
+      <div style="display:flex;align-items:center;gap:10px;min-width:180px">
+        ${S.icon("file", 22)}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.content)}</div>
+          <div style="font-size:11px;opacity:.7">${fmtBytes(0)}</div>
+        </div>
+        ${S.icon("download", 18)}
+      </div>`;
+    return `<span>${esc(m.content)}</span>`;
+  }
+
+  private updateChatSubtitle(): void {
+    const el = $("#chat-subtitle");
+    if (!el) return;
+    const c = this.state.currentContact;
+    if (!c) { el.textContent = "Select a conversation"; return; }
+    const t = this.state.typing.get(c.onion_address);
+    if (t?.is_typing) { el.textContent = "typing…"; el.style.color = "var(--accent)"; return; }
+    el.textContent = c.verified ? "✓ E2E encrypted · PQC" : "End-to-end encrypted";
+    el.style.color = "";
+  }
+
+  /* ── Messages ── */
+
+  private async sendMessage(): Promise<void> {
+    const ta = $("#composer") as HTMLTextAreaElement;
+    if (!ta) return;
+    const content = ta.value.trim();
+    if (!content) return;
+    ta.value = ""; ta.style.height = "auto";
+    $("#btn-send")!.setAttribute("disabled", "");
+
+    const contact = this.state.currentContact;
+    if (!contact) { this.toast("Select a conversation first"); return; }
+
+    try {
+      const msg = await api.sendMessage(contact.onion_address, content, this.replyTarget?.id || null);
+      const list = this.state.messages.get(contact.onion_address) || [];
+      list.push(msg); this.state.messages.set(contact.onion_address, list);
+      this.replyTarget = null;
+      this.renderMessages(); this.renderChatList();
+    } catch (e) {
+      this.toast("Failed to send: " + e);
     }
   }
 
-  async loadContacts(): Promise<void> {
-    try {
-      const contacts = await api.getContacts();
-      store.setContacts(contacts);
-      this.renderChatList(contacts);
-      this.renderContacts(contacts);
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
-    }
+  private notifyTyping(): void {
+    const c = this.state.currentContact;
+    if (!c) return;
+    if (this.typingTimeout) clearTimeout(this.typingTimeout);
+    api.sendTypingIndicator(c.onion_address, true).catch(() => {});
+    this.typingTimeout = setTimeout(() => {
+      api.sendTypingIndicator(c.onion_address, false).catch(() => {});
+    }, 2000);
   }
 
-  async loadGroups(): Promise<void> {
-    try {
-      const groups = await api.getGroups();
-      store.setGroups(groups);
-      this.renderGroupsList(groups);
-    } catch (err) {
-      console.error("Failed to load groups:", err);
-    }
-  }
+  /* ── Voice notes ── */
 
-  async loadCallHistory(): Promise<void> {
-    try {
-      const calls = await api.getCallHistory();
-      store.setCallHistory(calls);
-      this.renderCallHistory(calls);
-    } catch (err) {
-      console.error("Failed to load call history:", err);
+  private async toggleVoiceNote(): Promise<void> {
+    if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+      this.mediaRecorder.stop();
+      return;
     }
-  }
-
-  async loadSettings(): Promise<void> {
     try {
-      const settings = await api.getSettings();
-      const toggleMap: Record<string, string> = {
-        disappearing_messages_default: "toggle-disappearing",
-        read_receipts: "toggle-read-receipts",
-        typing_indicators: "toggle-typing-indicators",
-        notifications_enabled: "toggle-notifications",
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.audioChunks = [];
+      this.recordingStart = Date.now();
+      this.mediaRecorder.ondataavailable = (e) => this.audioChunks.push(e.data);
+      this.mediaRecorder.onstop = async () => {
+        const blob = new Blob(this.audioChunks, { type: "audio/webm" });
+        const c = this.state.currentContact;
+        if (c) { await api.sendVoiceNote(c.onion_address, blob).catch(err => this.toast(String(err))); }
+        stream.getTracks().forEach(t => t.stop());
       };
-      for (const [key, elId] of Object.entries(toggleMap)) {
-        const el = document.getElementById(elId) as HTMLInputElement | null;
-        if (el) el.checked = (settings as any)[key];
-      }
-      const themeSelect = document.getElementById("settings-theme") as HTMLSelectElement | null;
-      if (themeSelect) themeSelect.value = settings.theme;
-    } catch (err) {
-      console.error("Failed to load settings:", err);
+      this.mediaRecorder.start();
+      this.toast("Recording… tap stop when done");
+      const btn = $("#btn-voice-note");
+      btn?.classList.add("active");
+    } catch (e) {
+      this.toast("Microphone unavailable: " + e);
     }
   }
 
-  setupNavigation(): void {
-    document.querySelectorAll(".nav-item").forEach((item) => {
-      item.addEventListener("click", () => {
-        const screen = item.getAttribute("data-screen");
-        if (screen) this.showScreen(screen);
-      });
-    });
+  /* ── Calls ── */
 
-    document.getElementById("fab-add-contact")?.addEventListener("click", () => {
-      this.showModal("add-contact-modal");
-    });
-
-    document.getElementById("fab-create-group")?.addEventListener("click", () => {
-      this.showModal("create-group-modal");
-    });
-
-    document.getElementById("fab-scan-qr")?.addEventListener("click", () => {
-      this.showModal("qr-code-modal");
-    });
-
-    document.getElementById("chats-search-toggle")?.addEventListener("click", () => {
-      const bar = document.getElementById("chats-search-bar");
-      if (bar) bar.classList.toggle("hidden");
-    });
-
-    document.getElementById("contacts-search-toggle")?.addEventListener("click", () => {
-      const bar = document.getElementById("contacts-search-bar");
-      if (bar) bar.classList.toggle("hidden");
-    });
-  }
-
-  showScreen(name: string): void {
-    document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
-    const target = document.getElementById(`screen-${name}`);
-    if (target) target.classList.remove("hidden");
-
-    document.querySelectorAll(".nav-item").forEach((item) => {
-      item.classList.toggle("active", item.getAttribute("data-screen") === name);
-    });
-  }
-
-  renderChatList(contacts: Contact[]): void {
-    const container = document.getElementById("chat-list");
-    if (!container) return;
-
-    if (contacts.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">💬</div>
-          <h3>No conversations yet</h3>
-          <p>Add a contact to start chatting</p>
-        </div>`;
-      return;
+  private async startCall(isVideo: boolean): Promise<void> {
+    const c = this.state.currentContact;
+    if (!c) { this.toast("Select a contact first"); return; }
+    try {
+      const id = isVideo ? await api.startVideoCall(c.onion_address) : await api.startAudioCall(c.onion_address);
+      this.state.activeCall = { id, peer: c.onion_address, isVideo, incoming: false, started: Date.now() };
+      this.showCallOverlay();
+    } catch (e) {
+      this.toast("Call failed: " + e);
     }
+  }
 
-    container.innerHTML = contacts
-      .map((c) => {
-        const msgs = store.getMessagesForContact(c.onion_address);
-        const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-        const preview = lastMsg ? this.esc(lastMsg.content || "Attachment") : "No messages yet";
-        const time = lastMsg ? this.formatDate(lastMsg.timestamp) : "";
-        const unread = msgs.filter((m) => m.sender === c.onion_address && !m.read).length;
-        return `
-        <div class="chat-list-item" data-onion="${this.esc(c.onion_address)}">
-          <div class="avatar ${this.avatarColor(c.display_name)}">${c.display_name.charAt(0).toUpperCase()}</div>
-          <div class="chat-list-info">
-            <div class="chat-list-top">
-              <span class="chat-list-name">${this.esc(c.display_name)}</span>
-              <span class="chat-list-time">${time}</span>
-            </div>
-            <div class="chat-list-bottom">
-              <span class="chat-list-preview">${preview}</span>
-              ${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ""}
-            </div>
+  private showIncomingCall(payload: any): void {
+    const { call_id, peer_onion, is_video, from_name } = payload ?? {};
+    this.state.activeCall = { id: call_id, peer: peer_onion, isVideo: !!is_video, incoming: true, started: Date.now() };
+    const root = $("#call-overlay-root")!;
+    root.innerHTML = `
+      <div class="call-overlay">
+        <div class="call-video" style="place-items:center">
+          <div style="text-align:center;padding:24px">
+            ${S.avatar(from_name || shortOnion(peer_onion) || "?", 96)}
+            <h2 style="margin-top:16px">${esc(from_name || shortOnion(peer_onion))}</h2>
+            <p style="opacity:.7">${is_video ? "Incoming video call" : "Incoming audio call"}</p>
+            <p style="opacity:.5;font-size:12px;margin-top:8px">${S.icon(is_video ? "lock" : "shield", 14)} End-to-end encrypted</p>
           </div>
-        </div>`;
-      })
-      .join("");
-
-    container.querySelectorAll(".chat-list-item").forEach((el) => {
-      el.addEventListener("click", () => {
-        const onion = el.getAttribute("data-onion");
-        const contact = contacts.find((c) => c.onion_address === onion);
-        if (contact) this.openChat(contact);
-      });
-    });
-  }
-
-  renderContacts(contacts: Contact[]): void {
-    const container = document.getElementById("contacts-list");
-    if (!container) return;
-
-    if (contacts.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">👤</div>
-          <h3>No contacts</h3>
-          <p>Tap + to add a contact</p>
-        </div>`;
-      return;
-    }
-
-    container.innerHTML = contacts
-      .map(
-        (c) => `
-      <div class="contact-list-item" data-onion="${this.esc(c.onion_address)}">
-        <div class="avatar ${this.avatarColor(c.display_name)}">${c.display_name.charAt(0).toUpperCase()}</div>
-        <div class="contact-list-info">
-          <span class="contact-list-name">${this.esc(c.display_name)}</span>
-          <span class="contact-list-onion">${this.esc(c.onion_address)}</span>
         </div>
-      </div>`
-      )
-      .join("");
-
-    container.querySelectorAll(".contact-list-item").forEach((el) => {
-      el.addEventListener("click", () => {
-        const onion = el.getAttribute("data-onion");
-        const contact = contacts.find((c) => c.onion_address === onion);
-        if (contact) this.openChat(contact);
-      });
-    });
-  }
-
-  renderGroupsList(groups: Group[]): void {
-    const container = document.getElementById("groups-list");
-    if (!container) return;
-
-    if (groups.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">👥</div>
-          <h3>No groups</h3>
-          <p>Create a group to get started</p>
-        </div>`;
-      return;
-    }
-
-    container.innerHTML = groups
-      .map(
-        (g) => `
-      <div class="group-list-item" data-group-id="${this.esc(g.id)}">
-        <div class="avatar avatar-group">${g.name.charAt(0).toUpperCase()}</div>
-        <div class="group-list-info">
-          <span class="group-list-name">${this.esc(g.name)}</span>
-          <span class="group-list-members">${g.member_count} member${g.member_count !== 1 ? "s" : ""}</span>
+        <div class="call-controls">
+          <button class="call-btn end" id="call-reject" title="Decline">${S.icon("close", 24)}</button>
+          <button class="call-btn" id="call-accept" title="Accept" style="background:var(--success);border-color:var(--success)">${S.icon(is_video ? "camera" : "call", 24)}</button>
         </div>
-      </div>`
-      )
-      .join("");
-
-    container.querySelectorAll(".group-list-item").forEach((el) => {
-      el.addEventListener("click", () => {
-        const gid = el.getAttribute("data-group-id");
-        const group = groups.find((g) => g.id === gid);
-        if (group) this.openGroupChat(group);
-      });
+      </div>`;
+    $("#call-reject")!.addEventListener("click", () => { api.rejectCall(this.state.activeCall!.id).catch(()=>{}); this.dismissCallOverlay(); });
+    $("#call-accept")!.addEventListener("click", () => {
+      this.state.activeCall!.incoming = false;
+      api.answerVideoCall(this.state.activeCall!.id).catch(()=>{});
+      this.showCallOverlay();
     });
   }
 
-  renderCallHistory(calls: CallLogEntry[]): void {
-    const container = document.getElementById("call-history-list");
-    if (!container) return;
-
-    if (calls.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📞</div>
-          <h3>No calls yet</h3>
-        </div>`;
-      return;
-    }
-
-    container.innerHTML = calls
-      .map((call) => {
-        const dirIcon = call.direction === "outgoing" ? "↗" : call.status === "missed" ? "✕" : "↙";
-        const typeIcon = call.call_type === "video" ? "📹" : "📞";
-        return `
-        <div class="call-history-item" data-call-id="${this.esc(call.id)}">
-          <div class="call-icon ${call.status === "missed" ? "missed" : ""}">${dirIcon}</div>
-          <div class="call-type-icon">${typeIcon}</div>
-          <div class="call-info">
-            <span class="call-name">${this.esc(call.peer_onion)}</span>
-            <span class="call-date">${this.formatDate(call.started_at)}</span>
+  private showCallOverlay(): void {
+    const call = this.state.activeCall;
+    if (!call) return;
+    const root = $("#call-overlay-root")!;
+    const name = this.state.contacts.find(c => c.onion_address === call.peer)?.display_name || shortOnion(call.peer);
+    root.innerHTML = `
+      <div class="call-overlay">
+        <div class="call-video">
+          <video id="call-remote-video" autoplay playsinline muted></video>
+          ${call.isVideo ? `<video id="call-local-video" autoplay playsinline muted style="position:absolute;bottom:16px;right:16px;width:110px;height:150px;border-radius:14px;object-fit:cover;box-shadow:0 8px 24px rgba(0,0,0,.5)"></video>` : ""}
+          <div style="position:absolute;bottom:16px;left:16px;text-align:left">
+            <h2>${esc(name)}</h2>
+            <p style="opacity:.7;display:flex;align-items:center;gap:6px"><span class="call-timer">0:00</span> · ${S.icon("lock", 14)} ${call.isVideo ? "Video" : "Audio"} encrypted</p>
           </div>
-          <span class="call-duration">${call.duration_secs ? this.formatDuration(call.duration_secs) : ""}</span>
-        </div>`;
-      })
-      .join("");
-
-    const tabAll = document.getElementById("calls-tab-all");
-    const tabMissed = document.getElementById("calls-tab-missed");
-    const tabOutgoing = document.getElementById("calls-tab-outgoing");
-
-    const filterCalls = (filter: string) => {
-      const items = container.querySelectorAll(".call-history-item");
-      items.forEach((item) => {
-        const callId = item.getAttribute("data-call-id");
-        const call = calls.find((c) => c.id === callId);
-        if (!call) return;
-        if (filter === "all") {
-          (item as HTMLElement).style.display = "";
-        } else if (filter === "missed") {
-          (item as HTMLElement).style.display = call.status === "missed" ? "" : "none";
-        } else if (filter === "outgoing") {
-          (item as HTMLElement).style.display = call.direction === "outgoing" ? "" : "none";
-        }
-      });
-    };
-
-    tabAll?.addEventListener("click", () => filterCalls("all"));
-    tabMissed?.addEventListener("click", () => filterCalls("missed"));
-    tabOutgoing?.addEventListener("click", () => filterCalls("outgoing"));
+        </div>
+        <div class="call-controls">
+          <button class="call-btn active" id="call-mute" title="Mute">${S.icon("mic", 24)}</button>
+          ${call.isVideo ? `<button class="call-btn active" id="call-cam" title="Camera">${S.icon("video", 24)}</button>` : ""}
+          <button class="call-btn end" id="call-end" title="Hang up">${S.icon("close", 26)}</button>
+        </div>
+      </div>`;
+    call.timerInterval = setInterval(() => {
+      const secs = Math.floor((Date.now() - call.started) / 1000);
+      const t = $(`.call-timer`); if (t) t.textContent = `${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+    }, 1000);
+    $("#call-end")!.addEventListener("click", () => { api.endVideoCall(call.id).catch(()=>{}); this.onCallEnded(call.id); });
+    $("#call-mute")!.addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      btn.classList.toggle("active");
+      btn.innerHTML = btn.classList.contains("active") ? S.icon("mic", 24) : S.icon("mic", 24);
+    });
+    $("#call-cam")?.addEventListener("click", (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      btn.classList.toggle("active");
+    });
+    if (call.isVideo) this.startLocalVideo();
   }
 
-  async openChat(contact: Contact): Promise<void> {
-    this.currentContact = contact;
-    this.currentGroup = null;
-
-    const headerName = document.getElementById("chat-header-name");
-    const headerAvatar = document.getElementById("chat-header-avatar");
-    if (headerName) headerName.textContent = contact.display_name;
-    if (headerAvatar) {
-      headerAvatar.textContent = contact.display_name.charAt(0).toUpperCase();
-      headerAvatar.className = `avatar ${this.avatarColor(contact.display_name)}`;
-    }
-
-    this.showScreen("chat");
-    await this.loadMessages(contact.onion_address);
-    this.markAsRead(contact.onion_address);
-    this.scrollToBottom();
-  }
-
-  async openGroupChat(group: Group): Promise<void> {
-    this.currentGroup = group;
-    this.currentContact = null;
-
-    const headerName = document.getElementById("group-chat-header-name");
-    const headerInfo = document.getElementById("group-chat-header-info");
-    if (headerName) headerName.textContent = group.name;
-    if (headerInfo) headerInfo.textContent = `${group.member_count} members`;
-
-    this.showScreen("group-chat");
-    await this.loadGroupMessages(group.id);
-    this.scrollToBottom();
-  }
-
-  setupChatView(): void {
-    document.getElementById("chat-back-btn")?.addEventListener("click", () => {
-      this.showScreen("chats");
-      this.currentContact = null;
-    });
-
-    document.getElementById("chat-call-btn")?.addEventListener("click", () => {
-      this.startCall(false);
-    });
-
-    document.getElementById("chat-video-btn")?.addEventListener("click", () => {
-      this.startCall(true);
-    });
-
-    document.getElementById("chat-send-btn")?.addEventListener("click", () => {
-      this.sendMessage();
-    });
-
-    document.getElementById("chat-message-input")?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        this.sendMessage();
-      }
-    });
-
-    const msgInput = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
-    if (msgInput) {
-      msgInput.addEventListener("input", () => {
-        msgInput.style.height = "auto";
-        msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + "px";
-        this.sendTyping(true);
-      });
-    }
-
-    document.getElementById("chat-attach-btn")?.addEventListener("click", () => {
-      this.showModal("file-picker-modal");
-    });
-
-    document.getElementById("chat-emoji-btn")?.addEventListener("click", () => {
-      const picker = document.getElementById("emoji-picker");
-      if (picker) picker.classList.toggle("hidden");
-    });
-
-    document.getElementById("chat-voice-btn")?.addEventListener("click", async () => {
-      if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
-        this.mediaRecorder.stop();
-        return;
-      }
-      
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        this.mediaRecorder = new MediaRecorder(stream);
-        this.audioChunks = [];
-        this.recordingStartTime = Date.now();
-        
-        const voiceBtn = document.getElementById("chat-voice-btn");
-        if (voiceBtn) voiceBtn.classList.add("recording");
-        
-        this.mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) this.audioChunks.push(e.data);
-        };
-        
-        this.mediaRecorder.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop());
-          if (voiceBtn) voiceBtn.classList.remove("recording");
-          
-          const duration = (Date.now() - this.recordingStartTime) / 1000;
-          const blob = new Blob(this.audioChunks, { type: "audio/webm" });
-          
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const base64 = (reader.result as string).split(",")[1] || "";
-              if (this.currentContact) {
-                await api.sendVoiceNote(
-                  this.currentContact.onion_address,
-                  base64,
-                  `voice-${Date.now()}.webm`,
-                  "audio/webm",
-                  duration
-                );
-                await this.loadMessages(this.currentContact.onion_address);
-                this.scrollToBottom();
-                this.showToast("Voice note sent");
-              }
-            } catch (err) {
-              console.error("Failed to send voice note:", err);
-              this.showToast("Failed to send voice note");
-            }
-          };
-          reader.readAsDataURL(blob);
-        };
-        
-        this.mediaRecorder.start();
-        this.showToast("Recording... tap mic to stop");
-      } catch (err) {
-        this.showToast("Microphone access denied");
-      }
-    });
-
-    document.getElementById("chat-header-area")?.addEventListener("click", () => {
-      if (this.currentContact) this.showContactInfo(this.currentContact);
-    });
-  }
-
-  setupGroupChatView(): void {
-    document.getElementById("group-chat-back-btn")?.addEventListener("click", () => {
-      this.showScreen("chats");
-      this.currentGroup = null;
-    });
-
-    document.getElementById("group-chat-send-btn")?.addEventListener("click", () => {
-      this.sendGroupMessage();
-    });
-
-    document.getElementById("group-chat-message-input")?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        this.sendGroupMessage();
-      }
-    });
-
-    const msgInput = document.getElementById("group-chat-message-input") as HTMLTextAreaElement | null;
-    if (msgInput) {
-      msgInput.addEventListener("input", () => {
-        msgInput.style.height = "auto";
-        msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + "px";
-      });
-    }
-
-    document.getElementById("group-chat-attach-btn")?.addEventListener("click", () => {
-      this.showModal("file-picker-modal");
-    });
-
-    document.getElementById("group-chat-emoji-btn")?.addEventListener("click", () => {
-      const picker = document.getElementById("emoji-picker-group");
-      if (picker) picker.classList.toggle("hidden");
-    });
-
-    document.getElementById("group-chat-info-btn")?.addEventListener("click", () => {
-      if (this.currentGroup) this.showGroupInfo(this.currentGroup);
-    });
-  }
-
-  async loadMessages(contactOnion: string): Promise<void> {
+  private async startLocalVideo(): Promise<void> {
     try {
-      const messages = await api.getMessages(contactOnion);
-      store.setMessagesForContact(contactOnion, messages);
-      this.renderMessages(messages);
-      this.setupReplyPreview();
-    } catch (err) {
-      console.error("Failed to load messages:", err);
-      this.showToast("Failed to load messages");
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      this.localVideoStream = stream;
+      const v = $("#call-local-video") as HTMLVideoElement;
+      if (v) { v.srcObject = stream; v.play().catch(()=>{}); }
+    } catch (e) { console.warn("Camera unavailable:", e); }
+  }
+
+  private onCallEnded(id: string): void {
+    const call = this.state.activeCall;
+    if (call?.id === id || (id && !this.state.activeCall?.id)) {
+      this.dismissCallOverlay();
     }
   }
 
-  async loadGroupMessages(groupId: string): Promise<void> {
-    try {
-      const messages = await api.getGroupMessages(groupId);
-      store.setGroupMessagesForGroup(groupId, messages);
-      this.renderGroupMessages(messages);
-    } catch (err) {
-      console.error("Failed to load group messages:", err);
-      this.showToast("Failed to load messages");
-    }
+  private dismissCallOverlay(): void {
+    const call = this.state.activeCall;
+    if (call?.timerInterval) clearInterval(call.timerInterval);
+    if (this.localVideoStream) { this.localVideoStream.getTracks().forEach(t => t.stop()); this.localVideoStream = null; }
+    this.state.activeCall = null;
+    $("#call-overlay-root")!.innerHTML = "";
   }
 
-  async renderMessages(messages: Message[]): Promise<void> {
-    const container = document.getElementById("chat-messages");
-    if (!container) return;
+  /* ── Modals ── */
 
-    if (messages.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🔒</div>
-          <h3>End-to-end encrypted</h3>
-          <p>Send a message to start the conversation</p>
-        </div>`;
-      return;
-    }
-
-    for (const msg of messages) {
-      try {
-        const reactions = await api.getReactions(msg.id);
-        store.setReactionsForMessage(msg.id, reactions);
-      } catch { /* silent */ }
-    }
-
-    const identity = store.getIdentity();
+  private showModal(kind: string, data?: any): void {
+    const root = $("#modal-root")!;
     let html = "";
-    let lastDate = "";
+    let id = "";
 
-    for (const msg of messages) {
-      const dateStr = this.formatDate(msg.timestamp);
-      if (dateStr !== lastDate) {
-        html += `<div class="date-separator"><span>${dateStr}</span></div>`;
-        lastDate = dateStr;
+    switch (kind) {
+      case "settings": {
+        id = "modal-settings"; const s = this.state.settings || { theme: "dark", density: "default" } as any;
+        html = this.settingsModal(s);
+        break;
       }
-
-      const isSent = msg.sender === identity?.onion_address;
-      const statusIcon = isSent
-        ? msg.read
-          ? '<span class="msg-status msg-read">✓✓</span>'
-          : msg.delivered
-          ? '<span class="msg-status msg-delivered">✓✓</span>'
-          : '<span class="msg-status msg-sent">✓</span>'
-        : "";
-
-      const lockIcon = '<span class="msg-lock">🔒</span>';
-      const expiryIcon = msg.expires_at ? '<span class="msg-expiry">⏱</span>' : "";
-
-      let replyPreview = "";
-      if (msg.reply_to) {
-        const replyMsg = messages.find((m) => m.id === msg.reply_to);
-        replyPreview = `
-          <div class="reply-preview">
-            <div class="reply-preview-text">${replyMsg ? this.esc(replyMsg.content || "Attachment") : "Message"}</div>
-          </div>`;
-      }
-
-      let reactionsHtml = "";
-      const reactionsForMsg = store.getReactionsForMessage(msg.id);
-      if (reactionsForMsg.length > 0) {
-        const reactionMap = new Map<string, number>();
-        reactionsForMsg.forEach((r: Reaction) => {
-          reactionMap.set(r.emoji, (reactionMap.get(r.emoji) || 0) + 1);
-        });
-        const items = Array.from(reactionMap.entries())
-          .map(([emoji, count]) => `<span class="reaction-chip">${emoji} ${count > 1 ? count : ""}</span>`)
-          .join("");
-        reactionsHtml = `<div class="message-reactions">${items}</div>`;
-      }
-
-      const bodyHtml = msg.content ? `<div class="msg-text">${this.esc(msg.content)}</div>` : "";
-      const attachmentHtml = msg.message_type === "file" || msg.message_type === "image"
-        ? `<div class="msg-attachment">📎 ${this.esc(msg.content || "File")}</div>`
-        : "";
-
-      html += `
-        <div class="message ${isSent ? "sent" : "received"}" data-msg-id="${this.esc(msg.id)}">
-          ${replyPreview}
-          <div class="msg-bubble">
-            ${bodyHtml}
-            ${attachmentHtml}
-            <div class="msg-footer">
-              ${lockIcon}
-              <span class="msg-time">${this.formatTime(msg.timestamp)}</span>
-              ${expiryIcon}
-              ${statusIcon}
-            </div>
-          </div>
-          ${reactionsHtml}
-        </div>`;
-    }
-
-    container.innerHTML = html;
-
-    container.querySelectorAll(".message").forEach((el) => {
-      const msgId = el.getAttribute("data-msg-id");
-      const msg = messages.find((m) => m.id === msgId);
-      if (!msg) return;
-
-      let pressTimer: any;
-      el.addEventListener("mousedown", () => {
-        pressTimer = setTimeout(() => {
-          this.contextMenuTarget = msg;
-          this.showContextMenu(el as HTMLElement);
-        }, 500);
-      });
-      el.addEventListener("mouseup", () => clearTimeout(pressTimer));
-      el.addEventListener("mouseleave", () => clearTimeout(pressTimer));
-
-      el.addEventListener("touchstart", () => {
-        pressTimer = setTimeout(() => {
-          this.contextMenuTarget = msg;
-          this.showContextMenu(el as HTMLElement);
-        }, 500);
-      });
-      el.addEventListener("touchend", () => clearTimeout(pressTimer));
-
-      el.addEventListener("dblclick", async () => {
-        try {
-          await api.addReaction(msg.id, "❤️");
-          const reactions = await api.getReactions(msg.id);
-          store.setReactionsForMessage(msg.id, reactions);
-          this.renderMessages(messages);
-        } catch { /* silent */ }
-      });
-    });
-  }
-
-  renderGroupMessages(messages: GroupMessage[]): void {
-    const container = document.getElementById("group-chat-messages");
-    if (!container) return;
-
-    if (messages.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🔒</div>
-          <h3>End-to-end encrypted</h3>
-          <p>Send a message to start the conversation</p>
-        </div>`;
-      return;
-    }
-
-    const identity = store.getIdentity();
-    let html = "";
-    let lastDate = "";
-
-    for (const msg of messages) {
-      const dateStr = this.formatDate(msg.timestamp);
-      if (dateStr !== lastDate) {
-        html += `<div class="date-separator"><span>${dateStr}</span></div>`;
-        lastDate = dateStr;
-      }
-
-      const isSent = msg.sender === identity?.onion_address;
-      const senderName = isSent ? "You" : this.esc(msg.sender.slice(0, 12));
-
-      let replyPreview = "";
-      if (msg.reply_to) {
-        replyPreview = `
-          <div class="reply-preview">
-            <div class="reply-preview-text">Reply</div>
-          </div>`;
-      }
-
-      const bodyHtml = msg.content ? `<div class="msg-text">${this.esc(msg.content)}</div>` : "";
-
-      html += `
-        <div class="message ${isSent ? "sent" : "received"}" data-msg-id="${this.esc(msg.id)}">
-          ${!isSent ? `<div class="msg-sender">${senderName}</div>` : ""}
-          ${replyPreview}
-          <div class="msg-bubble">
-            ${bodyHtml}
-            <div class="msg-footer">
-              <span class="msg-lock">🔒</span>
-              <span class="msg-time">${this.formatTime(msg.timestamp)}</span>
-            </div>
-          </div>
-        </div>`;
-    }
-
-    container.innerHTML = html;
-  }
-
-  async sendMessage(): Promise<void> {
-    if (!this.currentContact) return;
-    const input = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
-    const text = input?.value.trim();
-    if (!text && !this.replyToMessage) return;
-
-    try {
-      let msg: Message;
-      if (this.replyToMessage) {
-        msg = await api.sendReplyMessage(this.currentContact.onion_address, text || "", "text", this.replyToMessage.id);
-      } else {
-        msg = await api.sendMessage(this.currentContact.onion_address, text || "", "text");
-      }
-      store.addMessage(this.currentContact.onion_address, msg);
-      this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
-      if (input) {
-        input.value = "";
-        input.style.height = "auto";
-      }
-      this.replyToMessage = null;
-      this.clearReplyPreview();
-      this.scrollToBottom();
-    } catch (err) {
-      console.error("Failed to send message:", err);
-      this.showToast("Failed to send message");
-    }
-  }
-
-  async sendGroupMessage(): Promise<void> {
-    if (!this.currentGroup) return;
-    const input = document.getElementById("group-chat-message-input") as HTMLTextAreaElement | null;
-    const text = input?.value.trim();
-    if (!text) return;
-
-    try {
-      const msg = await api.sendGroupMessage(this.currentGroup.id, text, "text");
-      store.addGroupMessage(this.currentGroup.id, msg);
-      this.renderGroupMessages(store.getGroupMessagesForGroup(this.currentGroup.id));
-      if (input) {
-        input.value = "";
-        input.style.height = "auto";
-      }
-      this.scrollToBottom();
-    } catch (err) {
-      console.error("Failed to send group message:", err);
-      this.showToast("Failed to send message");
-    }
-  }
-
-  setupModals(): void {
-    document.getElementById("add-contact-open")?.addEventListener("click", () => {
-      this.showModal("add-contact-modal");
-    });
-
-    document.getElementById("add-contact-close")?.addEventListener("click", () => {
-      this.hideModal("add-contact-modal");
-    });
-
-    document.getElementById("add-contact-save")?.addEventListener("click", async () => {
-      const nameInput = document.getElementById("add-contact-name") as HTMLInputElement | null;
-      const onionInput = document.getElementById("add-contact-onion") as HTMLInputElement | null;
-      const pubkeyInput = document.getElementById("add-contact-pubkey") as HTMLInputElement | null;
-      const name = nameInput?.value.trim();
-      const onion = onionInput?.value.trim();
-      const pubkey = pubkeyInput?.value.trim() || "";
-      if (!name || !onion) {
-        this.showToast("Name and onion address required");
-        return;
-      }
-      try {
-        await api.addContact(name, pubkey, onion);
-        await this.loadContacts();
-        this.hideModal("add-contact-modal");
-        if (nameInput) nameInput.value = "";
-        if (onionInput) onionInput.value = "";
-        if (pubkeyInput) pubkeyInput.value = "";
-        this.showToast("Contact added");
-      } catch (err) {
-        console.error("Failed to add contact:", err);
-        this.showToast("Failed to add contact");
-      }
-    });
-
-    document.getElementById("qr-code-open")?.addEventListener("click", async () => {
-      this.showModal("qr-code-modal");
-      const qrImg = document.getElementById("qr-code-image") as HTMLImageElement | null;
-      const identity = store.getIdentity();
-      if (qrImg && identity) {
-        try {
-          const dataUrl = await api.generateQrCode();
-          qrImg.src = dataUrl;
-        } catch (err) {
-          console.error("Failed to generate QR:", err);
-        }
-      }
-    });
-
-    document.getElementById("qr-code-close")?.addEventListener("click", () => {
-      this.hideModal("qr-code-modal");
-    });
-
-    document.getElementById("qr-scan-camera")?.addEventListener("click", async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        const video = document.createElement("video");
-        video.srcObject = stream;
-        video.setAttribute("playsinline", "");
-        video.setAttribute("muted", "");
-        video.play();
-
-        const scanDiv = document.createElement("div");
-        scanDiv.className = "qr-scan-overlay";
-        scanDiv.innerHTML = '<p>Point camera at QR code</p>';
-        scanDiv.appendChild(video);
-
-        const statusEl = document.createElement("p");
-        statusEl.className = "qr-scan-status";
-        statusEl.textContent = "Scanning...";
-        scanDiv.appendChild(statusEl);
-
-        const cancelBtn = document.createElement("button");
-        cancelBtn.textContent = "Cancel";
-        cancelBtn.className = "btn btn-secondary";
-        scanDiv.appendChild(cancelBtn);
-        document.body.appendChild(scanDiv);
-
-        let done = false;
-        const stopScan = () => {
-          if (done) return;
-          done = true;
-          stream.getTracks().forEach(t => t.stop());
-          scanDiv.remove();
-        };
-        cancelBtn.addEventListener("click", stopScan);
-
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-        let frameCount = 0;
-
-        const decodeFrame = async () => {
-          if (done || !scanDiv.parentNode) return;
-          try {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            if (canvas.width > 0 && canvas.height > 0) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert",
-              });
-              if (code && code.data && code.data.trim()) {
-                statusEl.textContent = "QR detected! Verifying...";
-                try {
-                  await api.scanQrCode(code.data.trim());
-                  await this.loadContacts();
-                  this.showToast("Contact added from QR");
-                  this.hideModal("qr-code-modal");
-                  stopScan();
-                  return;
-                } catch (err) {
-                  statusEl.textContent = "Invalid QR code — keep trying or paste data below";
-                }
-              } else {
-                statusEl.textContent = "Scanning...";
-              }
-            }
-          } catch {
-            // frame decode errors are transient
-          }
-
-          frameCount++;
-          // Throttle detection to every 3rd frame to save CPU
-          if (frameCount % 3 === 0) {
-            setTimeout(decodeFrame, 100);
-          } else {
-            requestAnimationFrame(decodeFrame);
-          }
-        };
-        video.addEventListener("playing", () => decodeFrame());
-
-        // Also allow paste
-        const pasteInput = document.createElement("input");
-        pasteInput.placeholder = "Or paste QR data here";
-        pasteInput.className = "input";
-        pasteInput.style.marginTop = "8px";
-        pasteInput.addEventListener("paste", async () => {
-          setTimeout(async () => {
-            const data = pasteInput.value.trim();
-            if (data) {
-              try {
-                await api.scanQrCode(data);
-                await this.loadContacts();
-                this.showToast("Contact added from QR");
-                this.hideModal("qr-code-modal");
-                stopScan();
-              } catch (err) {
-                this.showToast("Invalid QR code");
-              }
-            }
-          }, 100);
-        });
-        scanDiv.appendChild(pasteInput);
-
-      } catch (err) {
-        console.error("Camera access failed:", err);
-        this.showToast("Camera access denied");
-      }
-    });
-
-    document.getElementById("qr-scan-file")?.addEventListener("click", () => {
-      const fileInput = document.createElement("input");
-      fileInput.type = "file";
-      fileInput.accept = "image/*";
-      fileInput.addEventListener("change", async () => {
-        const file = fileInput.files?.[0];
-        if (!file) return;
-
-        const processImage = async (img: HTMLImageElement) => {
-          try {
-            const canvas = document.createElement("canvas");
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            if (!ctx) throw new Error("no-canvas");
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            // Try both normal and inverted orientations for robustness
-            let code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: "attemptBoth",
-            });
-            if (code && code.data && code.data.trim()) {
-              try {
-                await api.scanQrCode(code.data.trim());
-                await this.loadContacts();
-                this.showToast("Contact added from QR");
-                this.hideModal("qr-code-modal");
-                return;
-              } catch (err) {
-                this.showToast("Invalid QR code in image");
-                return;
-              }
-            }
-            this.showToast("No QR code found in image");
-          } catch (err) {
-            console.error("File QR decode failed:", err);
-            this.showToast("Could not decode image");
-          }
-        };
-
-        const reader = new FileReader();
-        reader.onload = () => {
-          const img = new Image();
-          img.onload = () => processImage(img);
-          img.onerror = () => this.showToast("Could not read image");
-          img.src = reader.result as string;
-        };
-        reader.readAsDataURL(file);
-      });
-      fileInput.click();
-    });
-
-    document.getElementById("edit-name-open")?.addEventListener("click", () => {
-      const input = document.getElementById("edit-name-input") as HTMLInputElement | null;
-      const identity = store.getIdentity();
-      if (input && identity) input.value = identity.display_name;
-      this.showModal("edit-name-modal");
-    });
-
-    document.getElementById("edit-name-close")?.addEventListener("click", () => {
-      this.hideModal("edit-name-modal");
-    });
-
-    document.getElementById("edit-name-save")?.addEventListener("click", async () => {
-      const input = document.getElementById("edit-name-input") as HTMLInputElement | null;
-      const name = input?.value.trim();
-      if (!name) {
-        this.showToast("Name is required");
-        return;
-      }
-      try {
-        await api.initIdentity(name);
-        await this.loadIdentity();
-        this.hideModal("edit-name-modal");
-        this.showToast("Name updated");
-      } catch (err) {
-        this.showToast("Failed to update name");
-      }
-    });
-
-    document.getElementById("create-group-open")?.addEventListener("click", () => {
-      this.showModal("create-group-modal");
-    });
-
-    document.getElementById("create-group-close")?.addEventListener("click", () => {
-      this.hideModal("create-group-modal");
-    });
-
-    document.getElementById("create-group-save")?.addEventListener("click", async () => {
-      const nameInput = document.getElementById("create-group-name") as HTMLInputElement | null;
-      const name = nameInput?.value.trim();
-      if (!name) {
-        this.showToast("Group name required");
-        return;
-      }
-      try {
-        await api.createGroup(name, name);
-        await this.loadGroups();
-        this.hideModal("create-group-modal");
-        if (nameInput) nameInput.value = "";
-        this.showToast("Group created");
-      } catch (err) {
-        this.showToast("Failed to create group");
-      }
-    });
-
-    document.getElementById("contact-info-close")?.addEventListener("click", () => {
-      this.hideModal("contact-info-modal");
-    });
-
-    document.getElementById("group-info-close")?.addEventListener("click", () => {
-      this.hideModal("group-info-modal");
-    });
-
-    document.getElementById("group-add-member-btn")?.addEventListener("click", async () => {
-      const input = document.getElementById("group-add-member-input") as HTMLInputElement | null;
-      const onion = input?.value.trim();
-      if (!onion || !this.currentGroup) return;
-      try {
-        const identity = store.getIdentity();
-        await api.addGroupMember(this.currentGroup.id, identity?.display_name || "Member", "", onion);
-        await this.loadGroups();
-        if (input) input.value = "";
-        this.showToast("Member added");
-      } catch (err) {
-        this.showToast("Failed to add member");
-      }
-    });
-
-    document.getElementById("delete-data-confirm")?.addEventListener("click", async () => {
-      try {
-        await api.deleteAllData();
-        this.hideModal("delete-data-modal");
-        store.clearAll();
-        this.showToast("All data deleted");
-        window.location.reload();
-      } catch (err) {
-        this.showToast("Failed to delete data");
-      }
-    });
-
-    document.getElementById("delete-data-open")?.addEventListener("click", () => {
-      this.showModal("delete-data-modal");
-    });
-
-    document.getElementById("delete-data-cancel")?.addEventListener("click", () => {
-      this.hideModal("delete-data-modal");
-    });
-
-    document.getElementById("file-picker-send")?.addEventListener("click", async () => {
-      const input = document.getElementById("file-picker-input") as HTMLInputElement | null;
-      const file = input?.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async () => {
-          try {
-            const base64 = (reader.result as string).split(",")[1] || "";
-            await this.handleFileSend(base64, file.name, file.type);
-            this.hideModal("file-picker-modal");
-          } catch (err) {
-            this.showToast("Failed to send file");
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    document.getElementById("file-picker-cancel")?.addEventListener("click", () => {
-      this.hideModal("file-picker-modal");
-    });
-
-    document.querySelectorAll(".modal-overlay").forEach((overlay) => {
-      overlay.addEventListener("click", (e) => {
-        if (e.target === overlay) {
-          (overlay as HTMLElement).classList.add("hidden");
-        }
-      });
-    });
-  }
-
-  setupCallOverlay(): void {
-    document.getElementById("call-mute-btn")?.addEventListener("click", () => {
-      const btn = document.getElementById("call-mute-btn");
-      btn?.classList.toggle("active");
-      if (this.activeCallId) api.toggleAudioMute(this.activeCallId);
-    });
-
-    document.getElementById("call-speaker-btn")?.addEventListener("click", () => {
-      const btn = document.getElementById("call-speaker-btn");
-      btn?.classList.toggle("active");
-    });
-
-    document.getElementById("call-end-btn")?.addEventListener("click", () => {
-      this.endCall();
-    });
-
-    document.getElementById("call-video-btn")?.addEventListener("click", () => {
-      const btn = document.getElementById("call-video-btn");
-      btn?.classList.toggle("active");
-      if (this.activeCallId) api.toggleVideo(this.activeCallId);
-    });
-
-    document.getElementById("call-screen-btn")?.addEventListener("click", () => {
-      const btn = document.getElementById("call-screen-btn");
-      const active = btn?.classList.toggle("active");
-      if (!this.activeCallId) return;
-      if (active) {
-        this.startScreenCapturing();
-      } else {
-        this.stopScreenCapturing();
-      }
-    });
-
-    document.getElementById("call-answer-btn")?.addEventListener("click", () => {
-      this.answerIncomingCall();
-    });
-
-    document.getElementById("call-decline-btn")?.addEventListener("click", () => {
-      this.declineIncomingCall();
-    });
-  }
-
-  async startCall(video: boolean): Promise<void> {
-    if (!this.currentContact) return;
-    try {
-      let callId: string;
-      if (video) {
-        callId = await api.startVideoCall(this.currentContact.onion_address);
-      } else {
-        callId = await api.startAudioCall(this.currentContact.onion_address);
-      }
-      this.activeCallId = callId;
-      this.callSeconds = 0;
-      this.isIncomingCall = false;
-      this.incomingPeerOnion = null;
-      this.activeCallPeerOnion = this.currentContact.onion_address;
-      this.activeCallIsVideo = video;
-
-      const overlay = document.getElementById("call-overlay");
-      overlay?.classList.remove("hidden");
-
-      const statusEl = document.getElementById("call-status");
-      if (statusEl) statusEl.textContent = "Ringing...";
-
-      const nameEl = document.getElementById("call-name");
-      if (nameEl) nameEl.textContent = this.currentContact.display_name;
-
-      const incomingCtrls = document.getElementById("call-incoming-controls");
-      incomingCtrls?.classList.add("hidden");
-
-      this.callTimerInterval = setInterval(() => {
-        this.callSeconds++;
-        const timerEl = document.getElementById("call-timer");
-        if (timerEl) timerEl.textContent = this.formatDuration(this.callSeconds);
-      }, 1000);
-
-      this.showToast(`Calling ${this.currentContact.display_name}...`);
-    } catch (err) {
-      console.error("Failed to start call:", err);
-      this.showToast("Failed to start call");
-    }
-  }
-
-  async answerIncomingCall(): Promise<void> {
-    if (!this.activeCallId || !this.incomingPeerOnion) return;
-    try {
-      await api.answerVideoCall(this.activeCallId);
-      const statusEl = document.getElementById("call-status");
-      if (statusEl) statusEl.textContent = "Connected";
-      const incomingCtrls = document.getElementById("call-incoming-controls");
-      incomingCtrls?.classList.add("hidden");
-      this.showToast("Call connected");
-      this.startCallMedia(this.activeCallIsVideo);
-    } catch (err) {
-      console.error("Failed to answer call:", err);
-      this.showToast("Failed to answer call");
-    }
-  }
-
-  async declineIncomingCall(): Promise<void> {
-    const callId = this.activeCallId;
-    const peer = this.incomingPeerOnion;
-    this.endCall();
-    if (callId && peer) {
-      try { await api.rejectCall(callId); } catch { /* ignore */ }
-    }
-    this.showToast("Call declined");
-  }
-
-  async startCallMedia(video: boolean): Promise<void> {
-    this.callSeq = 0;
-    // Capture local media (mic, and camera if video)
-    try {
-      const constraints: MediaStreamConstraints = { audio: true };
-      if (video) constraints.video = { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: "user" };
-      this.callMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (err) {
-      console.warn("Media capture partly failed:", err);
-      this.showToast("Microphone/camera not available");
-      return;
-    }
-
-    // Show video container for video calls
-    const vidContainer = document.getElementById("call-video-container");
-    if (vidContainer) {
-      if (video) {
-        vidContainer.classList.remove("hidden");
-        this.renderLocalVideo();
-      } else {
-        vidContainer.classList.add("hidden");
-      }
-    }
-
-    // Start sending the remote's frames timer (video) and audio packets
-    this.startVoiceStreaming();
-
-    if (video) {
-      this.startVideoStreaming();
-    }
-  }
-
-  startVoiceStreaming(): void {
-    this.startMicVoiceStream();
-  }
-
-  startMicVoiceStream(): void {
-    const stream = this.callMediaStream;
-    if (!stream || !this.activeCallId || !this.currentContact) return;
-    const micTracks = stream.getAudioTracks();
-    if (micTracks.length === 0) return;
-    const micStream = new MediaStream(micTracks);
-    this.mediaRecorder = new MediaRecorder(micStream, { mimeType: "audio/mp4" });
-    this.mediaRecorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) this.sendVoiceChunk(e.data);
-    };
-    this.mediaRecorder.start(500);
-  }
-
-  sendVoiceChunk(blob: Blob): void {
-    const callId = this.activeCallId;
-    const peer = this.activeCallPeerOnion;
-    if (!callId || !peer) return;
-    blob.arrayBuffer().then((buf) => {
-      const data = Array.from(new Uint8Array(buf));
-      const seq = this.callSeq++;
-      // Packetize in 500ms chunks -> send in ~8KB pieces over the wire
-      const chunkSize = 8000;
-      for (let i = 0; i < data.length; i += chunkSize) {
-        const piece = data.slice(i, i + chunkSize);
-        api.sendVoicePacket(peer, callId, seq, piece, 48000, 1).catch(() => {});
-      }
-    }).catch(() => {});
-  }
-
-  async startVideoStreaming(): Promise<void> {
-    this.stopVideoStreaming();
-    this.callVideoTimer = setInterval(() => {
-      this.captureAndSendFrame();
-    }, 500);
-  }
-
-  captureAndSendFrame(): void {
-    const callId = this.activeCallId;
-    const peer = this.activeCallPeerOnion;
-    const stream = this.callMediaStream;
-    if (!callId || !peer || !stream) return;
-    const videoTracks = stream.getVideoTracks();
-    if (videoTracks.length === 0) return;
-
-    const vidEl = document.createElement("video");
-    vidEl.srcObject = stream;
-    vidEl.muted = true;
-    vidEl.onloadedmetadata = () => {
-      vidEl.play();
-      const canvas = document.createElement("canvas");
-      canvas.width = 160;
-      canvas.height = 120;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(vidEl, 0, 0, 160, 120);
-      const jpeg = canvas.toDataURL("image/jpeg", 0.4);
-      const base64 = jpeg.split(",")[1];
-      if (!base64) return;
-      try {
-        const binary = atob(base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        api.sendVideoFrame(peer, callId, this.callSeq++, Array.from(bytes), 160, 120).catch(() => {});
-        // Mirror to local preview
-        const localCtx = (document.getElementById("call-local-video") as HTMLCanvasElement | null)?.getContext("2d");
-        if (localCtx) localCtx.drawImage(vidEl, 0, 0, 160, 120);
-      } catch { /* ignore */ }
-    };
-  }
-
-  async startScreenCapturing(): Promise<void> {
-    try {
-      this.stopScreenCapturing();
-      const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
-      this.screenStream = screenStream;
-      this.stopVideoStreaming();
-      this.callVideoTimer = setInterval(() => {
-        const callId = this.activeCallId;
-        const peer = this.activeCallPeerOnion;
-        if (!callId || !peer) return;
-        const vidEl = document.createElement("video");
-        vidEl.srcObject = this.screenStream;
-        vidEl.muted = true;
-        vidEl.onloadedmetadata = () => {
-          vidEl.play();
-          const canvas = document.createElement("canvas");
-          canvas.width = 200;
-          canvas.height = 150;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          ctx.drawImage(vidEl, 0, 0, 200, 150);
-          const jpeg = canvas.toDataURL("image/jpeg", 0.3);
-          const base64 = jpeg.split(",")[1];
-          if (!base64) return;
-          try {
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            api.sendScreenFrame(peer, callId, this.callSeq++, Array.from(bytes), 200, 150).catch(() => {});
-          } catch { }
-        };
-      }, 700);
-    } catch (err) {
-      this.showToast("Screen share not available");
-    }
-  }
-
-  stopScreenCapturing(): void {
-    this.stopVideoStreaming();
-    if (this.screenStream) {
-      this.screenStream.getTracks().forEach(t => t.stop());
-      this.screenStream = null;
-    }
-    const btn = document.getElementById("call-screen-btn");
-    btn?.classList.remove("active");
-  }
-
-  stopVideoStreaming(): void {
-    if (this.callVideoTimer) {
-      clearInterval(this.callVideoTimer);
-      this.callVideoTimer = null;
-    }
-  }
-
-  async endCall(): Promise<void> {
-    const callId = this.activeCallId;
-    if (callId) {
-      try {
-        await api.endVideoCall(callId);
-      } catch (err) {
-        console.error("Failed to end call:", err);
-      }
-    }
-
-    // Stop media resources
-    this.callMediaStream?.getTracks().forEach(t => t.stop());
-    this.callMediaStream = null;
-    this.stopScreenCapturing();
-    this.stopVideoStreaming();
-    if (this.mediaRecorder) {
-      try { this.mediaRecorder.stop(); } catch { /* ignore */ }
-      this.mediaRecorder = null;
-    }
-
-    this.activeCallId = null;
-    this.isIncomingCall = false;
-    this.incomingPeerOnion = null;
-    this.activeCallPeerOnion = null;
-    this.activeCallIsVideo = false;
-    this.callSeq = 0;
-    this.voiceQ = [];
-    this.voicePlaying = false;
-    clearInterval(this.callTimerInterval);
-    this.callTimerInterval = null;
-    this.callSeconds = 0;
-
-    const overlay = document.getElementById("call-overlay");
-    overlay?.classList.add("hidden");
-    const vidContainer = document.getElementById("call-video-container");
-    vidContainer?.classList.add("hidden");
-    const remoteC = document.getElementById("call-remote-container");
-    if (remoteC) {
-      const img = remoteC.querySelector("img");
-      if (img) img.remove();
-    }
-
-    await this.loadCallHistory();
-  }
-
-  renderLocalVideo(): void {
-    const vidContainer = document.getElementById("call-video-container");
-    if (vidContainer) vidContainer.classList.remove("hidden");
-  }
-
-  setupContextMenu(): void {
-    document.getElementById("ctx-reply")?.addEventListener("click", () => {
-      if (this.contextMenuTarget) {
-        this.replyToMessage = this.contextMenuTarget;
-        this.showReplyPreview(this.contextMenuTarget);
-        const input = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
-        input?.focus();
-      }
-      this.hideContextMenu();
-    });
-
-    document.getElementById("ctx-copy")?.addEventListener("click", async () => {
-      if (this.contextMenuTarget?.content) {
-        try {
-          await navigator.clipboard.writeText(this.contextMenuTarget.content);
-          this.showToast("Copied to clipboard");
-        } catch {
-          this.showToast("Failed to copy");
-        }
-      }
-      this.hideContextMenu();
-    });
-
-    document.getElementById("ctx-delete")?.addEventListener("click", async () => {
-      if (this.contextMenuTarget && this.currentContact) {
-        try {
-          await api.deleteMessage(this.contextMenuTarget.id);
-          store.removeMessage(this.contextMenuTarget.id);
-          this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
-          this.showToast("Message deleted");
-        } catch (err) {
-          this.showToast("Failed to delete message");
-        }
-      }
-      this.hideContextMenu();
-    });
-
-    document.getElementById("ctx-forward")?.addEventListener("click", () => {
-      if (!this.contextMenuTarget) { this.hideContextMenu(); return; }
-
-      const contacts = store.getContacts();
-      if (contacts.length === 0) {
-        this.showToast("No contacts to forward to");
-        this.hideContextMenu();
-        return;
-      }
-
-      const forwardDiv = document.createElement("div");
-      forwardDiv.className = "modal-overlay";
-      forwardDiv.innerHTML = `
-        <div class="modal">
-          <div class="modal-header">
-            <h3>Forward message</h3>
-            <button class="modal-close">&times;</button>
-          </div>
+      case "profile": {
+        id = "modal-profile";
+        const me = this.state.identity;
+        html = `
+          <div class="modal-head"><h3>My profile</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
           <div class="modal-body">
-            <div class="forward-contact-list">
-              ${contacts.map(c => `
-                <div class="forward-contact-item" data-onion="${this.esc(c.onion_address)}">
-                  <div class="avatar ${this.avatarColor(c.display_name)}">${c.display_name.charAt(0).toUpperCase()}</div>
-                  <span>${this.esc(c.display_name)}</span>
-                </div>
-              `).join("")}
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px">
+              ${S.avatar(me?.display_name || "?", 84)}
+              <h2 style="font-size:20px">${esc(me?.display_name || "Unknown")}</h2>
+              <div class="pill"><span class="dot" style="background:var(--success)"></span> P2P online</div>
             </div>
-          </div>
-        </div>`;
+            <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div><div class="label">Your vchat ID</div>
+                <div class="pill" style="cursor:pointer" id="copy-onion">${S.icon("key", 14)} ${esc(shortOnion(me?.onion_address || ""))}</div>
+              </div>
+              <div class="label">Share via QR</div>
+              <button class="btn primary" id="show-qr">${S.icon("qr", 18)} Show QR code</button>
+            </div>
+            <button class="btn" id="btn-backup">Export backup (later)</button>
+          </div>`;
+        break;
+      }
+      case "new-chat": {
+        id = "modal-new-chat";
+        html = `
+          <div class="modal-head"><h3>New chat</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+          <div class="modal-body">
+            <button class="btn primary" id="new-add-contact" style="width:100%;justify-content:flex-start">${S.icon("user", 18)} Add contact</button>
+            <button class="btn" id="new-create-group" style="width:100%;justify-content:flex-start">${S.icon("groups", 18)} Create group</button>
+            <button class="btn" id="new-scan-qr" style="width:100%;justify-content:flex-start">${S.icon("qr", 18)} Scan QR code</button>
+          </div>`;
+        break;
+      }
+      case "qr-scan": {
+        id = "modal-qr-scan";
+        html = `
+          <div class="modal-head"><h3>Scan QR code</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+          <div class="modal-body">
+            <video id="qr-video" style="width:100%;border-radius:14px;background:#000" playsinline muted></video>
+            <canvas id="qr-canvas" hidden></canvas>
+            <p style="font-size:12px;color:var(--text-2);text-align:center">Point your camera at a vchat QR code</p>
+            <div style="display:flex;gap:8px">
+              <button class="btn ghost" id="qr-paste">${S.icon("upload", 16)} Paste image</button>
+              <button class="btn" id="qr-cancel">Cancel</button>
+            </div>
+          </div>`;
+        break;
+      }
+      case "attach": {
+        id = "modal-attach";
+        html = `
+          <div class="modal-head"><h3>Attach</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+          <div class="modal-body">
+            <button class="btn" id="att-file" style="width:100%;justify-content:flex-start">${S.icon("file", 18)} Send file</button>
+            <button class="btn" id="att-image" style="width:100%;justify-content:flex-start">${S.icon("image", 18)} Send image</button>
+            <button class="btn" id="att-voice" style="width:100%;justify-content:flex-start">${S.icon("mic", 18)} Record voice note</button>
+          </div>`;
+        break;
+      }
+      case "chat-menu": {
+        id = "modal-chat-menu";
+        const c = this.state.currentContact;
+        html = `
+          <div class="modal-head"><h3>${esc(c?.display_name || "")}</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+          <div class="modal-body">
+            <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px">${S.icon("shield", 20)} <div><div class="label" style="margin:0">Encryption</div><div style="font-size:13px">${c?.verified ? "Verified · post-quantum" : "E2E encrypted · PQC"}</div></div></div>
+              <div style="display:flex;align-items:center;gap:10px">${S.icon("globe", 20)} <div><div class="label" style="margin:0">vchat ID</div><div style="font-size:13px;font-family:var(--mono)">${esc(c?.onion_address || "")}</div></div></div>
+              <button class="btn" id="menu-clear">${S.icon("trash", 18)} Clear messages</button>
+              <button class="btn" id="menu-block" style="color:var(--danger)">Block contact</button>
+            </div>
+          </div>`;
+        break;
+      }
+      default: return;
+    }
 
-      forwardDiv.querySelector(".modal-close")?.addEventListener("click", () => forwardDiv.remove());
-      forwardDiv.addEventListener("click", (e) => { if (e.target === forwardDiv) forwardDiv.remove(); });
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.id = "backdrop-" + id;
+    modal.innerHTML = `<div class="modal" id="${id}">${html}</div>`;
+    root.appendChild(modal);
+    this.modalStack.push(modal);
+    this.wireModal(modal, kind);
 
-      const msgToForward = this.contextMenuTarget;
-      forwardDiv.querySelectorAll(".forward-contact-item").forEach(el => {
-        el.addEventListener("click", async () => {
-          const onion = el.getAttribute("data-onion");
-          if (!onion || !msgToForward) return;
-          try {
-            await api.sendForwardMessage(onion, msgToForward.sender, msgToForward.content || "");
-            this.showToast("Message forwarded");
-            forwardDiv.remove();
-          } catch (err) {
-            this.showToast("Failed to forward message");
-          }
+    // post-render wiring
+    switch (kind) {
+      case "settings": this.wireSettings(modal); break;
+      case "profile": {
+        const qrBtn = modal.querySelector("#show-qr");
+        qrBtn?.addEventListener("click", async () => {
+          try { const svg = await api.generateQRCode(); this.showQr(svg); } catch (e) { this.toast(String(e)); }
         });
-      });
-
-      document.body.appendChild(forwardDiv);
-      this.hideContextMenu();
-    });
-
-    document.getElementById("ctx-disappear")?.addEventListener("click", async () => {
-      if (this.contextMenuTarget) {
-        try {
-          await api.setDisappearingMessage(this.contextMenuTarget.id, 3600);
-          this.showToast("Disappearing message set (1 hour)");
-        } catch (err) {
-          this.showToast("Failed to set disappearing message");
-        }
+        const copyBtn = modal.querySelector("#copy-onion");
+        copyBtn?.addEventListener("click", () => { navigator.clipboard?.writeText(this.state.identity?.onion_address || "").then(() => this.toast("ID copied")).catch(()=>{}); });
+        break;
       }
-      this.hideContextMenu();
-    });
-
-    document.querySelectorAll(".ctx-reaction-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (this.contextMenuTarget) {
-          const emoji = btn.getAttribute("data-emoji");
-          if (emoji) {
-            try {
-              await api.addReaction(this.contextMenuTarget.id, emoji);
-              if (this.currentContact) {
-                const reactions = await api.getReactions(this.contextMenuTarget.id);
-                store.setReactionsForMessage(this.contextMenuTarget.id, reactions);
-                this.renderMessages(store.getMessagesForContact(this.currentContact.onion_address));
-              }
-            } catch { /* silent */ }
-          }
-        }
-        this.hideContextMenu();
-      });
-    });
-
-    document.addEventListener("click", (e) => {
-      const menu = document.getElementById("context-menu");
-      if (menu && !menu.contains(e.target as Node)) {
-        this.hideContextMenu();
+      case "new-chat": {
+        modal.querySelector("#new-add-contact")?.addEventListener("click", () => this.showModal("add-contact"));
+        modal.querySelector("#new-create-group")?.addEventListener("click", () => this.showModal("create-group"));
+        modal.querySelector("#new-scan-qr")?.addEventListener("click", () => this.showModal("qr-scan"));
+        break;
       }
-    });
-  }
-
-  showContextMenu(target: HTMLElement): void {
-    const menu = document.getElementById("context-menu");
-    if (!menu) return;
-    menu.classList.remove("hidden");
-    const rect = target.getBoundingClientRect();
-    menu.style.top = `${rect.top}px`;
-    menu.style.left = `${rect.left}px`;
-  }
-
-  hideContextMenu(): void {
-    document.getElementById("context-menu")?.classList.add("hidden");
-  }
-
-  setupEmojiPicker(): void {
-    const emojis = [
-      "😀","😂","😍","🥰","😊","😎","🤔","😢","😡","👍",
-      "👎","❤️","🔥","🎉","👋","🙏","💪","🤝","👏","💯",
-      "✅","❌","⭐","🌟","💡","🔒","📱","💻","🎵","🌈",
-      "☀️","🌙","🌸","🍕","🍔","☕","🎂","🎮","⚽",
-      "🏀","🎯","📚","✈️","🚗","🏠","🔑","💰","📞","📧"
-    ];
-
-    const picker = document.getElementById("emoji-picker-grid");
-    if (picker) {
-      picker.innerHTML = emojis.map((e) => `<span class="emoji-item">${e}</span>`).join("");
-      picker.querySelectorAll(".emoji-item").forEach((el) => {
-        el.addEventListener("click", () => {
-          const input = document.getElementById("chat-message-input") as HTMLTextAreaElement | null;
-          if (input) {
-            const start = input.selectionStart;
-            const end = input.selectionEnd;
-            input.value = input.value.substring(0, start) + el.textContent + input.value.substring(end);
-            input.selectionStart = input.selectionEnd = start + (el.textContent?.length || 0);
-            input.focus();
-          }
-          picker.parentElement?.classList.add("hidden");
+      case "qr-scan": this.startQrScan(modal); break;
+      case "attach": {
+        modal.querySelector("#att-file")?.addEventListener("click", async () => {
+          const file = await this.pickFile();
+          if (file) this.sendFile(file);
         });
-      });
-    }
-
-    const groupPicker = document.getElementById("emoji-picker-group-grid");
-    if (groupPicker) {
-      groupPicker.innerHTML = emojis.map((e) => `<span class="emoji-item">${e}</span>`).join("");
-      groupPicker.querySelectorAll(".emoji-item").forEach((el) => {
-        el.addEventListener("click", () => {
-          const input = document.getElementById("group-chat-message-input") as HTMLTextAreaElement | null;
-          if (input) {
-            const start = input.selectionStart;
-            const end = input.selectionEnd;
-            input.value = input.value.substring(0, start) + el.textContent + input.value.substring(end);
-            input.selectionStart = input.selectionEnd = start + (el.textContent?.length || 0);
-            input.focus();
-          }
-          el.closest(".emoji-picker")?.classList.add("hidden");
+        modal.querySelector("#att-image")?.addEventListener("click", async () => {
+          const file = await this.pickFile(true);
+          if (file) this.sendFile(file, true);
         });
-      });
-    }
-  }
-
-  async handleFileSend(fileData: string, fileName: string, mimeType: string): Promise<void> {
-    if (!this.currentContact && !this.currentGroup) return;
-    try {
-      const progressEl = document.getElementById("file-send-progress");
-      if (progressEl) progressEl.classList.remove("hidden");
-
-      if (this.currentContact) {
-        await api.sendFile(this.currentContact.onion_address, fileData, fileName, mimeType);
-      } else if (this.currentGroup) {
-        const members = await api.getGroupMembers(this.currentGroup.id);
-        const identity = store.getIdentity();
-        for (const m of members) {
-          if (m.onion_address !== identity?.onion_address) {
-            await api.sendFile(m.onion_address, fileData, fileName, mimeType);
-          }
-        }
+        modal.querySelector("#att-voice")?.addEventListener("click", () => { this.toggleVoiceNote(); });
+        break;
       }
-      this.showToast("File sent");
-      if (progressEl) progressEl.classList.add("hidden");
-    } catch (err) {
-      console.error("Failed to send file:", err);
-      this.showToast("Failed to send file");
-    }
-  }
-
-  setupSearch(): void {
-    const chatSearch = document.getElementById("chats-search-input") as HTMLInputElement | null;
-    chatSearch?.addEventListener("input", () => {
-      const query = chatSearch.value.toLowerCase();
-      const contacts = store.getContacts();
-      const filtered = contacts.filter(
-        (c) => c.display_name.toLowerCase().includes(query) || c.onion_address.toLowerCase().includes(query)
-      );
-      this.renderChatList(filtered);
-    });
-
-    const contactSearch = document.getElementById("contacts-search-input") as HTMLInputElement | null;
-    contactSearch?.addEventListener("input", () => {
-      const query = contactSearch.value.toLowerCase();
-      const contacts = store.getContacts();
-      const filtered = contacts.filter(
-        (c) => c.display_name.toLowerCase().includes(query) || c.onion_address.toLowerCase().includes(query)
-      );
-      this.renderContacts(filtered);
-    });
-  }
-
-  setupEventListeners(): void {
-    listen<Message>("new-message", (event) => {
-      const msg = event.payload;
-      const identity = store.getIdentity();
-      const isFromMe = msg.sender === identity?.onion_address;
-      const peerOnion = isFromMe ? msg.recipient : msg.sender;
-
-      store.addMessage(peerOnion, msg);
-
-      if (this.currentContact && (this.currentContact.onion_address === peerOnion)) {
-        this.renderMessages(store.getMessagesForContact(peerOnion));
-        this.scrollToBottom();
-        this.markAsRead(peerOnion);
-      }
-
-      this.loadContacts();
-    });
-
-    listen("tor-status-changed", () => {
-      this.updateTorStatus();
-    });
-
-    listen<{call_id: string, peer_onion: string, call_type: string}>("incoming-call", (event) => {
-      const { call_id, peer_onion, call_type } = event.payload;
-      this.activeCallId = call_id;
-      this.isIncomingCall = true;
-      this.incomingPeerOnion = peer_onion;
-      this.activeCallPeerOnion = peer_onion;
-      const isVideo = String(call_type).toLowerCase().startsWith("video");
-      this.activeCallIsVideo = isVideo;
-      this.callSeconds = 0;
-
-      const overlay = document.getElementById("call-overlay");
-      overlay?.classList.remove("hidden");
-
-      const vidContainer = document.getElementById("call-video-container");
-      vidContainer?.classList.add("hidden");
-
-      const nameEl = document.getElementById("call-name");
-      if (nameEl) nameEl.textContent = peer_onion.slice(0, 16);
-
-      const statusEl = document.getElementById("call-status");
-      if (statusEl) statusEl.textContent = "Incoming call...";
-
-      const incomingCtrls = document.getElementById("call-incoming-controls");
-      incomingCtrls?.classList.remove("hidden");
-
-      // Start the incoming session so we can accept/decline over the wire
-      api.createIncomingCall(call_id, peer_onion, isVideo ? "video" : "voice").catch((err) => {
-        console.error("createIncomingCall failed:", err);
-      });
-
-      this.showToast(`Incoming ${call_type} call from ${peer_onion.slice(0, 16)}`);
-    });
-
-    listen("call-accepted", () => {
-      const statusEl = document.getElementById("call-status");
-      if (statusEl) statusEl.textContent = "Connected";
-      const incomingCtrls = document.getElementById("call-incoming-controls");
-      incomingCtrls?.classList.add("hidden");
-      this.showToast("Call connected");
-      this.isIncomingCall = false;
-      this.incomingPeerOnion = null;
-      // Once peer accepts, begin our own media send/receive
-      this.startCallMedia(this.activeCallIsVideo);
-    });
-
-    listen("call-rejected", () => {
-      this.showToast("Call rejected");
-      this.endCall();
-    });
-
-    listen("call-ended", () => {
-      this.showToast("Call ended");
-      this.endCall();
-    });
-
-    listen<any>("voice-packet", (event) => {
-      this.handleVoicePacket(event.payload);
-    });
-
-    listen<any>("video-frame", (event) => {
-      this.handleVideoFrame(event.payload);
-    });
-
-    listen<any>("screen-frame", (event) => {
-      this.handleScreenFrame(event.payload);
-    });
-
-    listen<any>("new-group-message", (event) => {
-      const msg = event.payload;
-      if (this.currentGroup && this.currentGroup.id === msg.group_id) {
-        const msgs = store.getGroupMessagesForGroup(msg.group_id);
-        msgs.push(msg);
-        store.setGroupMessagesForGroup(msg.group_id, msgs);
-        this.renderGroupMessages(msgs);
-        this.scrollToBottom();
-      }
-    });
-
-    listen<{peer_onion: string, is_typing: boolean}>("typing-indicator", (event) => {
-      const payload = event.payload;
-      if (this.currentContact && this.currentContact.onion_address === payload.peer_onion) {
-        const indicator = document.getElementById("chat-typing-indicator");
-        if (indicator) {
-          if (payload.is_typing) {
-            indicator.textContent = `${this.currentContact.display_name} is typing...`;
-            indicator.classList.remove("hidden");
-          } else {
-            indicator.classList.add("hidden");
-          }
-        }
-      }
-    });
-  }
-
-  handleVoicePacket(payload: any): void {
-    if (!payload || !payload.data || !Array.isArray(payload.data)) return;
-    const bytes = new Uint8Array(payload.data);
-    const blob = new Blob([bytes], { type: "audio/mp4" });
-    this.voiceQ.push(blob);
-    if (!this.voicePlaying) this.playVoiceQueue();
-  }
-
-  playVoiceQueue(): void {
-    if (this.voiceQ.length === 0) {
-      this.voicePlaying = false;
-      return;
-    }
-    this.voicePlaying = true;
-    const blob = this.voiceQ.shift()!;
-    const audioUrl = URL.createObjectURL(blob);
-    const audio = new Audio(audioUrl);
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl);
-      this.playVoiceQueue();
-    };
-    audio.play().catch(() => {
-      this.playVoiceQueue();
-    });
-  }
-
-  handleVideoFrame(payload: any): void {
-    if (!payload || !payload.data) return;
-    this.renderRemoteFrame(payload.data, "call-remote-container", false);
-  }
-
-  handleScreenFrame(payload: any): void {
-    if (!payload || !payload.data) return;
-    this.renderRemoteFrame(payload.data, "call-remote-container", true);
-  }
-
-  renderRemoteFrame(dataArr: number[], containerId: string, _isScreen: boolean): void {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    const bytes = new Uint8Array(dataArr);
-    let binary = "";
-    for (const b of bytes) binary += String.fromCharCode(b);
-    const dataUrl = "data:image/jpeg;base64," + btoa(binary);
-
-    let img = container.querySelector("img") as HTMLImageElement | null;
-    if (!img) {
-      img = document.createElement("img");
-      container.appendChild(img);
-    }
-    img.src = dataUrl;
-  }
-
-  setupSettings(): void {
-    const toggles = [
-      { id: "toggle-disappearing", key: "disappearing_messages_default" },
-      { id: "toggle-read-receipts", key: "read_receipts" },
-      { id: "toggle-typing-indicators", key: "typing_indicators" },
-      { id: "toggle-notifications", key: "notifications_enabled" },
-    ];
-
-    for (const toggle of toggles) {
-      const el = document.getElementById(toggle.id) as HTMLInputElement | null;
-      if (el) {
-        el.addEventListener("change", async () => {
-          try {
-            await api.updateSettings({ [toggle.key]: el.checked });
-          } catch (err) {
-            console.error("Failed to update setting:", err);
-          }
+      case "chat-menu": {
+        modal.querySelector("#menu-clear")?.addEventListener("click", () => this.toast("Clearing…"));
+        modal.querySelector("#menu-block")?.addEventListener("click", () => {
+          const c = this.state.currentContact;
+          if (c) { api.blockContact(c.id).then(()=>{ this.toast("Contact blocked"); this.state.contacts = this.state.contacts.filter(x=>x.id!==c.id); this.renderChatList(); }).catch(e=>this.toast(String(e))); }
         });
+        break;
       }
     }
+  }
 
-    const themeSelect = document.getElementById("settings-theme") as HTMLSelectElement | null;
-    if (themeSelect) {
-      themeSelect.addEventListener("change", async () => {
-        try {
-          await api.updateSettings({ theme: themeSelect.value });
-        } catch (err) {
-          console.error("Failed to update theme:", err);
+  private wireModal(modal: HTMLElement, kind: string): void {
+    modal.querySelector(".modal-close")?.addEventListener("click", () => this.closeModal());
+    modal.addEventListener("click", (e) => { if (e.target === modal) this.closeModal(); });
+  }
+
+  private closeModal(): void {
+    const modal = this.modalStack.pop();
+    if (!modal) return;
+    if (modal.id === "backdrop-modal-qr-scan") this.stopQrScan();
+    modal.style.animation = "fadeOut .2s ease-out";
+    setTimeout(() => modal.remove(), 200);
+  }
+
+  private settingsModal(s: any): string {
+    const themes = ["dark","light","amoled","ocean"];
+    const densities = ["default","compact","comfortable"];
+    return `
+      <div class="modal-head"><h3>Settings</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+      <div class="modal-body">
+        <div class="label">Theme</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${themes.map(t => `<button class="chip theme-opt ${s?.theme === t ? "active" : ""}" data-theme-val="${t}">${esc(t)}</button>`).join('')}
+        </div>
+        <div class="label" style="margin-top:12px">Density</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${densities.map(d => `<button class="chip density-opt ${s?.density === d ? "active" : ""}" data-density-val="${d}">${esc(d)}</button>`).join('')}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px">
+          <div><div class="label" style="margin:0">Notifications</div><div style="font-size:12px;color:var(--text-2)">Incoming alerts</div></div>
+          <input type="checkbox" class="toggle-chk" data-setting="notifications" ${s?.notifications === false ? "" : "checked"} style="width:44px;height:24px;accent-color:var(--accent)">
+        </div>
+        <div class="card" style="padding:14px;display:flex;align-items:center;gap:12px;margin-top:12px">
+          ${S.icon("shield", 22)}
+          <div style="flex:1"><div class="label" style="margin:0">Encryption</div><div style="font-size:12px;color:var(--text-2)">Post-quantum · ML-KEM-768 + X25519 · AES-256-GCM</div></div>
+          <span class="pill online"><span class="dot"></span> Active</span>
+        </div>
+      </div>`;
+  }
+
+  private wireSettings(modal: HTMLElement): void {
+    modal.querySelectorAll(".theme-opt").forEach(b => b.addEventListener("click", async () => {
+      const t = b.dataset.themeVal!;
+      modal.querySelectorAll(".theme-opt").forEach(x => x.classList.toggle("active", x === b));
+      document.documentElement.dataset.theme = t;
+      const s = this.state.settings as any || {};
+      s.theme = t; this.state.settings = s;
+      await api.updateSettings(s).catch(()=>{});
+    }));
+    modal.querySelectorAll(".density-opt").forEach(b => b.addEventListener("click", async () => {
+      const d = b.dataset.densityVal!;
+      modal.querySelectorAll(".density-opt").forEach(x => x.classList.toggle("active", x === b));
+      document.documentElement.dataset.density = d;
+      const s = this.state.settings as any || {};
+      s.density = d; this.state.settings = s;
+      await api.updateSettings(s).catch(()=>{});
+    }));
+    modal.querySelector(".toggle-chk")?.addEventListener("change", async (e) => {
+      const s = this.state.settings as any || {};
+      s.notifications = (e.target as HTMLInputElement).checked;
+      await api.updateSettings(s).catch(()=>{});
+    });
+  }
+
+  private showQr(svgData: string): void {
+    const root = $("#modal-root")!;
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.innerHTML = `
+      <div class="modal" style="max-width:340px">
+        <div class="modal-head"><h3>My QR code</h3><button class="icon-btn modal-close">${S.icon("close", 18)}</button></div>
+        <div class="modal-body" style="align-items:center">
+          <div style="width:100%;" id="qr-svg">${svgData}</div>
+          <p style="font-size:12px;color:var(--text-2);text-align:center">Scan this to add your contact</p>
+        </div>
+      </div>`;
+    root.appendChild(modal);
+    modal.querySelector(".modal-close")?.addEventListener("click", () => modal.remove());
+    modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+  }
+
+  /* ── QR scanning ── */
+
+  private async startQrScan(modal: HTMLElement): Promise<void> {
+    try {
+      this.qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (!modal.isConnected) { this.qrStream.getTracks().forEach(t=>t.stop()); return; }
+      const video = modal.querySelector("#qr-video") as HTMLVideoElement;
+      const canvas = modal.querySelector("#qr-canvas") as HTMLCanvasElement;
+      video.srcObject = this.qrStream;
+      await video.play();
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const tick = () => {
+        if (!modal.isConnected) return;
+        if (video.readyState >= 2 && ctx) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+          if (code?.data) {
+            this.handleScannedQr(code.data, modal);
+            return;
+          }
         }
+        this.qrAnim = requestAnimationFrame(tick);
+      };
+      this.qrAnim = requestAnimationFrame(tick);
+    } catch (e) {
+      this.toast("Camera unavailable — paste an image instead");
+      const pasteBtn = modal.querySelector("#qr-paste");
+      pasteBtn?.addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file"; input.accept = "image/*";
+        input.onchange = async () => {
+          const f = input.files?.[0]; if (!f) return;
+          const img = await createImageBitmap(f);
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width; canvas.height = img.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, 0, 0);
+          const code = jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
+          if (code?.data) this.handleScannedQr(code.data, modal);
+          else this.toast("No QR code found in image");
+        };
+        input.click();
       });
     }
   }
 
-  async updateTypingIndicators(): Promise<void> {
-    if (!this.currentContact) return;
+  private stopQrScan(): void {
+    if (this.qrAnim) cancelAnimationFrame(this.qrAnim);
+    if (this.qrStream) { this.qrStream.getTracks().forEach(t => t.stop()); this.qrStream = null; }
+  }
+
+  private handleScannedQr(data: string, modal: HTMLElement): void {
+    this.stopQrScan();
+    this.toast("QR scanned!");
     try {
-      const status: TypingStatus = await api.getTypingStatus(this.currentContact.onion_address);
-      const indicator = document.getElementById("chat-typing-indicator");
-      if (indicator) {
-        if (status.is_typing) {
-          indicator.textContent = `${this.currentContact.display_name} is typing...`;
-          indicator.classList.remove("hidden");
-        } else {
-          indicator.classList.add("hidden");
-        }
-      }
-    } catch {
-      // silent
+      this.processQrData(data, modal);
+    } catch (e) {
+      this.toast("Invalid QR: " + e);
     }
   }
 
-  async sendTyping(isTyping: boolean): Promise<void> {
-    if (!this.currentContact) return;
+  private async processQrData(data: string, modal: HTMLElement): Promise<void> {
     try {
-      await api.sendTypingIndicator(this.currentContact.onion_address, isTyping);
-      if (isTyping) {
-        clearTimeout(this.typingTimeout);
-        this.typingTimeout = setTimeout(() => this.sendTyping(false), 3000);
-      }
-    } catch {
-      // silent
+      const contact = await api.parseAndAddQr(data);
+      this.state.contacts.push(contact);
+      this.renderChatList();
+      this.closeModal();
+      this.toast("Contact added: " + contact.display_name);
+    } catch (e) {
+      // fallback: open add-contact prefilled
+      this.toast("Parsing…");
+      this.closeModal();
+      this.showModal("add-contact", { prefilled: data });
     }
   }
 
-  showToast(msg: string): void {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.remove("hidden");
-    setTimeout(() => toast.classList.add("hidden"), 3000);
-  }
+  /* ── Files ── */
 
-  avatarColor(name: string): string {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = (hash << 5) - hash + name.charCodeAt(i);
-      hash |= 0;
-    }
-    const colors = ["avatar-red", "avatar-blue", "avatar-green", "avatar-purple", "avatar-orange", "avatar-pink", "avatar-teal", "avatar-indigo"];
-    return colors[Math.abs(hash) % colors.length];
-  }
-
-  esc(text: string): string {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  formatTime(timestamp: number): string {
-    const d = new Date(timestamp * 1000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  formatDuration(secs: number): string {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
-  }
-
-  formatDate(timestamp: number): string {
-    const d = new Date(timestamp * 1000);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (d >= today) return "Today";
-    if (d >= yesterday) return "Yesterday";
-
-    const diffMs = today.getTime() - d.getTime();
-    const diffDays = Math.floor(diffMs / 86400000);
-    if (diffDays < 7) {
-      return d.toLocaleDateString([], { weekday: "long" });
-    }
-    return d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
-  }
-
-  scrollToBottom(): void {
-    const container = document.getElementById("chat-messages") || document.getElementById("group-chat-messages");
-    if (container) {
-      setTimeout(() => (container.scrollTop = container.scrollHeight), 50);
-    }
-  }
-
-  private showModal(id: string): void {
-    document.getElementById(id)?.classList.remove("hidden");
-  }
-
-  private hideModal(id: string): void {
-    document.getElementById(id)?.classList.add("hidden");
-  }
-
-  private showContactInfo(contact: Contact): void {
-    const nameEl = document.getElementById("contact-info-name");
-    const onionEl = document.getElementById("contact-info-onion");
-    if (nameEl) nameEl.textContent = contact.display_name;
-    if (onionEl) onionEl.textContent = contact.onion_address;
-    this.showModal("contact-info-modal");
-
-    const verifyBtn = document.getElementById("contact-info-verify");
-    const blockBtn = document.getElementById("contact-info-block");
-    const deleteBtn = document.getElementById("contact-info-delete");
-
-    const cleanup = () => {
-      verifyBtn?.replaceWith(verifyBtn!.cloneNode(true));
-      blockBtn?.replaceWith(blockBtn!.cloneNode(true));
-      deleteBtn?.replaceWith(deleteBtn!.cloneNode(true));
-    };
-    cleanup();
-
-    document.getElementById("contact-info-verify")?.addEventListener("click", async () => {
-      try {
-        await api.verifyContact(contact.onion_address);
-        this.showToast("Contact verified");
-        this.hideModal("contact-info-modal");
-        await this.loadContacts();
-      } catch { this.showToast("Failed to verify"); }
-    });
-
-    document.getElementById("contact-info-block")?.addEventListener("click", async () => {
-      try {
-        await api.blockContact(contact.onion_address);
-        this.showToast("Contact blocked");
-        this.hideModal("contact-info-modal");
-        await this.loadContacts();
-      } catch { this.showToast("Failed to block"); }
-    });
-
-    document.getElementById("contact-info-delete")?.addEventListener("click", async () => {
-      try {
-        await api.deleteContact(contact.onion_address);
-        this.showToast("Contact deleted");
-        this.hideModal("contact-info-modal");
-        await this.loadContacts();
-      } catch { this.showToast("Failed to delete"); }
+  private pickFile(imageOnly = false): Promise<File | null> {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      if (imageOnly) input.accept = "image/*";
+      input.onchange = () => resolve(input.files?.[0] || null);
+      input.click();
     });
   }
 
-  private async showGroupInfo(group: Group): Promise<void> {
-    const nameEl = document.getElementById("group-info-name");
-    const membersEl = document.getElementById("group-info-members");
-    if (nameEl) nameEl.textContent = group.name;
-
+  private async sendFile(file: File, asImage = false): Promise<void> {
+    const c = this.state.currentContact;
+    if (!c) return;
     try {
-      const members = await api.getGroupMembers(group.id);
-      if (membersEl) {
-        membersEl.innerHTML = members.map((m: GroupMember) => `
-          <div class="group-member">
-            <div class="avatar avatar-small ${this.avatarColor(m.display_name || m.onion_address)}">${(m.display_name || '?').charAt(0).toUpperCase()}</div>
-            <span class="member-name">${this.esc(m.display_name || m.onion_address.slice(0, 16))}</span>
-            <span class="member-role">${m.role}</span>
-          </div>
-        `).join("");
-      }
-    } catch (err) {
-      console.error("Failed to load group members:", err);
-      if (membersEl) {
-        membersEl.innerHTML = `<div class="group-member"><span>${this.esc(group.created_by)}</span><span class="member-role">admin</span></div>`;
-      }
-    }
-
-    this.showModal("group-info-modal");
+      const data = new Uint8Array(await file.arrayBuffer());
+      await api.sendFile(c.onion_address, file.name, data);
+      this.toast("File sent");
+    } catch (e) { this.toast("File send failed: " + e); }
   }
 
-  private showReplyPreview(msg: Message): void {
-    const container = document.getElementById("reply-preview-container");
-    const textEl = document.getElementById("reply-preview-text");
-    if (container && textEl) {
-      textEl.textContent = msg.content || "Attachment";
-      container.classList.remove("hidden");
-    }
+  /* ── Transfers ── */
+
+  private onTransferUpdate(payload: any): void {
+    this.toast(`Transfer ${payload?.status || "updated"}`);
   }
 
-  private clearReplyPreview(): void {
-    document.getElementById("reply-preview-container")?.classList.add("hidden");
+  /* ── Group ── */
+
+  private openGroup(g: Group): void {
+    this.state.currentGroup = g;
+    this.state.currentContact = null;
+    $("#screen-welcome")!.classList.add("hidden");
+    const chat = $("#screen-chat")!; chat.classList.remove("hidden");
+    $("#btn-back")!.style.display = window.innerWidth <= 900 ? "" : "none";
+    $("#chat-title")!.textContent = g.name;
+    $("#chat-avatar")!.innerHTML = S.avatar(g.name, 44, "", false);
+    $("#chat-subtitle")!.textContent = `Group · ${g.member_count} members`;
+    this.renderGroupMessages(g);
   }
 
-  private setupReplyPreview(): void {
-    document.getElementById("reply-cancel")?.addEventListener("click", () => {
-      this.replyToMessage = null;
-      this.clearReplyPreview();
+  private renderGroupMessages(g: Group): void {
+    const box = $("#messages");
+    if (!box) return;
+    box.innerHTML = "";
+    this.state.groupMessages.get(g.id)?.forEach(m => {
+      box.insertAdjacentHTML("beforeend", `<div class="bubble-row recv"><div class="bubble">${esc(m.content)}<div class="bubble-meta">${timeFmt(m.timestamp)}</div></div></div>`);
     });
+    box.scrollTop = box.scrollHeight;
   }
 
-  private async markAsRead(onion: string): Promise<void> {
-    try {
-      await api.markMessagesRead(onion);
-      store.markContactMessagesRead(onion);
-    } catch {
-      // silent
-    }
+  /* ── Toast ── */
+
+  private toast(msg: string): void {
+    const stack = $("#toast-stack");
+    if (!stack) return;
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.textContent = msg;
+    stack.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = "0";
+      el.style.transition = "opacity .3s";
+      setTimeout(() => el.remove(), 320);
+    }, 2600);
   }
 }
 
+/* ══════════════════════ BOOTSTRAP ══════════════════════ */
+
 const app = new VchatApp();
-app.init();
+(window as any).vchat = app;
+
+// Hot-reload safe
+if (typeof (window as any).__vchat_setup_done === "undefined") {
+  (window as any).__vchat_setup_done = true;
+}
+
+export { VchatApp };
