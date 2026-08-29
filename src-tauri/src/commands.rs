@@ -243,7 +243,7 @@ fn now_ts() -> i64 {
 }
 
 async fn get_call_session(
-    state: SharedWebRTCState,
+    state: webrtc::SharedWebRTCState,
     call_id: &str,
 ) -> Result<crate::webrtc::CallSession, String> {
     let sessions = webrtc::get_active_calls(state).await;
@@ -984,22 +984,22 @@ pub async fn set_relay_config(
     username: Option<String>,
     password: Option<String>,
 ) -> Result<(), String> {
-    let store_fn = |k: &str, v: Option<String>| async move {
+    let store_fn = |k: String, v: Option<String>| async move {
         match v {
             Some(val) => {
-                store::set_setting(k, &val).await.map_err(|e| e.to_string())?;
+                store::set_setting(&k, &val).await.map_err(|e| e.to_string())?;
             }
             None => {
-                store::set_setting(k, "").await.map_err(|e| e.to_string())?;
+                store::set_setting(&k, "").await.map_err(|e| e.to_string())?;
             }
         }
         Ok::<(), String>(())
     };
 
-    store_fn("relay_stun", stun).await?;
-    store_fn("relay_turn", turn).await?;
-    store_fn("relay_user", username).await?;
-    store_fn("relay_pass", password).await?;
+    store_fn("relay_stun".to_string(), stun).await?;
+    store_fn("relay_turn".to_string(), turn).await?;
+    store_fn("relay_user".to_string(), username).await?;
+    store_fn("relay_pass".to_string(), password).await?;
     Ok(())
 }
 
