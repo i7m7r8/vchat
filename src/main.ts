@@ -234,7 +234,7 @@ class VchatApp {
       this.state.typing.set(t.peer_onion, t);
       this.updateChatSubtitle();
     });
-    listen("message-delivered", (e: any) => { this.renderMessages(); });
+    listen("message-delivered", (_e: any) => { this.renderMessages(); });
     listen("call-ended", (e: any) => { this.onCallEnded(e.payload); });
     listen("file-transfer-update", (e: any) => { this.onTransferUpdate(e.payload); });
     listen("tor-status", (e: any) => this.setConnStatus(e.payload));
@@ -468,7 +468,6 @@ class VchatApp {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.mediaRecorder = new MediaRecorder(stream);
       this.audioChunks = [];
-      this.recordingStart = Date.now();
       this.mediaRecorder.ondataavailable = (e) => this.audioChunks.push(e.data);
       this.mediaRecorder.onstop = async () => {
         const blob = new Blob(this.audioChunks, { type: "audio/webm" });
@@ -768,17 +767,17 @@ class VchatApp {
   }
 
   private wireSettings(modal: HTMLElement): void {
-    modal.querySelectorAll(".theme-opt").forEach((b: HTMLElement) => b.addEventListener("click", async () => {
+    Array.from(modal.querySelectorAll(".theme-opt")).forEach((b: HTMLElement) => b.addEventListener("click", async () => {
       const t = b.dataset.themeVal!;
-      modal.querySelectorAll(".theme-opt").forEach(x => x.classList.toggle("active", x === b));
+      Array.from(modal.querySelectorAll(".theme-opt")).forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.theme = t;
       const s = this.state.settings as any || {};
       s.theme = t; this.state.settings = s;
       await api.updateSettings(s).catch(()=>{});
     }));
-    modal.querySelectorAll(".density-opt").forEach((b: HTMLElement) => b.addEventListener("click", async () => {
+    Array.from(modal.querySelectorAll(".density-opt")).forEach((b: HTMLElement) => b.addEventListener("click", async () => {
       const d = b.dataset.densityVal!;
-      modal.querySelectorAll(".density-opt").forEach(x => x.classList.toggle("active", x === b));
+      Array.from(modal.querySelectorAll(".density-opt")).forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.density = d;
       const s = this.state.settings as any || {};
       s.density = d; this.state.settings = s;
@@ -865,13 +864,13 @@ class VchatApp {
     this.stopQrScan();
     this.toast("QR scanned!");
     try {
-      this.processQrData(data, modal);
+      this.processQrData(data);
     } catch (e) {
       this.toast("Invalid QR: " + e);
     }
   }
 
-  private async processQrData(data: string, modal: HTMLElement): Promise<void> {
+  private async processQrData(data: string): Promise<void> {
     try {
       const contact = await api.parseAndAddQr(data);
       this.state.contacts.push(contact);
