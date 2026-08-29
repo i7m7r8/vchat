@@ -1231,6 +1231,106 @@ body {
   color: #fff;
 }
 
+.call-incoming-controls {
+  display: flex;
+  gap: 64px;
+  align-items: center;
+  padding: 24px;
+}
+
+.call-incoming-controls.hidden {
+  display: none;
+}
+
+#call-answer-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  gap: 4px;
+}
+
+#call-answer-btn svg,
+#call-answer-btn span {
+  color: #fff;
+}
+
+#call-decline-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--error);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  gap: 4px;
+}
+
+#call-decline-btn svg,
+#call-decline-btn span {
+  color: #fff;
+}
+
+.call-video-container {
+  width: 100%;
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  overflow: hidden;
+}
+
+.call-video-container.hidden {
+  display: none;
+}
+
+.call-remote-container {
+  width: 100%;
+  height: calc(100% - 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-remote-container canvas,
+.call-remote-container img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.call-local-box {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 160px;
+  height: 120px;
+  background: #222;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.call-local-box canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .emoji-picker {
   background: var(--surface);
   border-radius: 16px 16px 0 0;

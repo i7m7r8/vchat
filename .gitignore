@@ -2,10 +2,13 @@ node_modules/
 dist/
 target/
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
 *.db
 *.db-wal
 *.db-shm
 .DS_Store
 Thumbs.db
 *.log
+*.jks
+*.keystore

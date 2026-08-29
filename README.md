@@ -56,13 +56,25 @@ P2P encrypted messenger with embedded Tor. No servers, no tracking.
 
 ## Building
 
-All builds happen via GitHub Actions CI. See `.github/workflows/build.yml`.
+All builds happen via GitHub Actions CI (`.github/workflows/build.yml`), which
+is also the single-authority build pipeline for the published Android APK.
+Development happens on low-power devices, so **no local toolchain is required**;
+the CI runs type-checking, tests, lints and every platform bundle.
 
-For local development:
+The Android APK is built as a single `universal` APK (all ABIs) with a
+deterministic manifest and versioning (`scripts/android-prepare.sh`), and the
+generated Gradle project plus `Cargo.lock` are committed to the repo by
+`.github/workflows/sync-android.yml`.
+
+For local development (desktop):
 ```bash
 npm install
 npm run tauri dev
 ```
+
+See [`docs/F-DROID.md`](docs/F-DROID.md) for the F-Droid publishing procedure,
+reproducible-build rationale and the submit recipe
+([`fdroid/org.vchat.messenger.yml`](fdroid/org.vchat.messenger.yml)).
 
 ## License
 

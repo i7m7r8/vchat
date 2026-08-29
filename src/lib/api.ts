@@ -226,6 +226,21 @@ export const api = {
   answerVideoCall: (callId: string): Promise<void> =>
     invoke("answer_video_call", { callId }),
 
+  rejectCall: (callId: string): Promise<void> =>
+    invoke("reject_call", { callId }),
+
+  createIncomingCall: (callId: string, peerOnion: string, callType: string): Promise<void> =>
+    invoke("create_incoming_call", { callId, peerOnion, callType }),
+
+  sendVoicePacket: (toOnion: string, callId: string, seq: number, data: number[], sampleRate: number, channels: number): Promise<void> =>
+    invoke("send_voice_packet", { ofOnion: toOnion, callId, seq, data, sampleRate, channels }),
+
+  sendVideoFrame: (toOnion: string, callId: string, seq: number, data: number[], width: number, height: number): Promise<void> =>
+    invoke("send_video_frame", { ofOnion: toOnion, callId, seq, data, width, height }),
+
+  sendScreenFrame: (toOnion: string, callId: string, seq: number, data: number[], width: number, height: number): Promise<void> =>
+    invoke("send_screen_frame", { ofOnion: toOnion, callId, seq, data, width, height }),
+
   endVideoCall: (callId: string): Promise<void> =>
     invoke("end_video_call", { callId }),
 

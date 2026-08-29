@@ -242,6 +242,17 @@ fn now_ts() -> i64 {
     Utc::now().timestamp()
 }
 
+async fn get_call_session(
+    state: SharedVchatState,
+    call_id: &str,
+) -> Result<crate::webrtc::CallSession, String> {
+    let sessions = webrtc::get_active_calls(state).await;
+    sessions
+        .into_iter()
+        .find(|s| s.call_id == call_id)
+        .ok_or_else(|| format!("Call {call_id} not found"))
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Identity commands
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -709,6 +720,15 @@ pub async fn start_video_call(
     .await
     .map_err(|e| e.to_string())?;
 
+    messaging::send_call_invite(
+        &recipient_onion,
+        &session.call_id,
+        crate::messaging::protocol::CallType::Video,
+        "",
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
     crate::error::audit_log(
         "call_started",
         &format!("type=video, peer={recipient_onion}"),
@@ -739,6 +759,15 @@ pub async fn start_audio_call(
     .await
     .map_err(|e| e.to_string())?;
 
+    messaging::send_call_invite(
+        &recipient_onion,
+        &session.call_id,
+        crate::messaging::protocol::CallType::Voice,
+        "",
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
     crate::error::audit_log(
         "call_started",
         &format!("type=audio, peer={recipient_onion}"),
@@ -752,7 +781,11 @@ pub async fn answer_video_call(
     state: State<'_, SharedVchatState>,
     call_id: String,
 ) -> Result<(), String> {
-    webrtc::answer_video_call(state.webrtc.clone(), &call_id)
+    let session = webrtc::answer_video_call(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    messaging::send_call_accept(&session.peer_onion, &call_id)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -761,16 +794,224 @@ pub async fn answer_video_call(
 }
 
 #[tauri::command]
+pub async fn reject_call(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+) -> Result<(), String> {
+    let session = get_call_session(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    messaging::send_call_reject(&session.peer_onion, &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    webrtc::end_video_call(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    webrtc::close_media_session(state.webrtc.clone(), &call_id).await;
+
+    crate::error::audit_log("call_rejected", &format!("call_id={call_id}"));
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn end_video_call(
     state: State<'_, SharedVchatState>,
     call_id: String,
 ) -> Result<(), String> {
-    webrtc::end_video_call(state.webrtc.clone(), &call_id)
+    let session = get_call_session(state.webrtc.clone(), &call_id)
         .await
         .map_err(|e| e.to_string())?;
 
+    messaging::send_call_end(&session.peer_onion, &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    webrtc::end_video_call(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    webrtc::close_media_session(state.webrtc.clone(), &call_id).await;
+
     crate::error::audit_log("call_ended", &format!("call_id={call_id}"));
     Ok(())
+}
+
+#[tauri::command]
+pub async fn send_voice_packet(
+    of_onion: String,
+    call_id: String,
+    seq: u64,
+    data: Vec<u8>,
+    sample_rate: u32,
+    channels: u8,
+) -> Result<(), String> {
+    messaging::send_voice_packet(&of_onion, &call_id, seq, &data, sample_rate, channels)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_video_frame(
+    of_onion: String,
+    call_id: String,
+    seq: u64,
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    messaging::send_video_frame(&of_onion, &call_id, seq, &data, width, height)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_screen_frame(
+    of_onion: String,
+    call_id: String,
+    seq: u64,
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    messaging::send_screen_frame(&of_onion, &call_id, seq, &data, width, height)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_incoming_call(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+    peer_onion: String,
+    call_type: String,
+) -> Result<(), String> {
+    let ctype = if call_type == "voice" {
+        crate::webrtc::CallType::Audio
+    } else {
+        crate::webrtc::CallType::Video
+    };
+    webrtc::establish_incoming_call(state.webrtc.clone(), &call_id, &peer_onion, ctype)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Load the self-hostable STUN/TURN relay configuration (defaults to none).
+async fn load_relay_config() -> crate::webrtc::RelayConfig {
+    let mut cfg = crate::webrtc::RelayConfig::default();
+    if let Some(stun) = store::get_setting("relay_stun").await.unwrap_or(None) {
+        cfg.stun_server = Some(stun);
+    }
+    if let Some(turn) = store::get_setting("relay_turn").await.unwrap_or(None) {
+        cfg.turn_server = Some(turn);
+    }
+    if let Some(user) = store::get_setting("relay_user").await.unwrap_or(None) {
+        cfg.turn_username = Some(user);
+    }
+    if let Some(pass) = store::get_setting("relay_pass").await.unwrap_or(None) {
+        cfg.turn_password = Some(pass);
+    }
+    cfg
+}
+
+#[tauri::command]
+pub async fn gather_ice_candidates(
+    state: State<'_, SharedVchatState>,
+    app: tauri::AppHandle,
+    call_id: String,
+) -> Result<Vec<String>, String> {
+    let relay = load_relay_config().await;
+    let info = webrtc::init_media_session(state.webrtc.clone(), &call_id, relay, app)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(info.local_candidates)
+}
+
+#[tauri::command]
+pub async fn add_remote_ice_candidate(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+    candidate: String,
+) -> Result<bool, String> {
+    webrtc::add_remote_ice_candidate(state.webrtc.clone(), &call_id, &candidate)
+        .await
+        .map_err(|e| e.to_string())?;
+    // Attempt ICE connectivity to the newly added remote candidate.
+    webrtc::run_ice_connect(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn connect_ice(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+) -> Result<bool, String> {
+    webrtc::run_ice_connect(state.webrtc.clone(), &call_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_media_frame(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+    frame_id: u32,
+    data: Vec<u8>,
+) -> Result<bool, String> {
+    webrtc::send_media_frame(state.webrtc.clone(), &call_id, frame_id, &data)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_ice_candidate(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+    peer_onion: String,
+    candidate: String,
+) -> Result<(), String> {
+    messaging::send_ice_candidate(&peer_onion, &call_id, &candidate)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_relay_config(
+    stun: Option<String>,
+    turn: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+) -> Result<(), String> {
+    let store_fn = |k: &str, v: Option<String>| async move {
+        match v {
+            Some(val) => {
+                store::set_setting(k, &val).await.map_err(|e| e.to_string())?;
+            }
+            None => {
+                store::set_setting(k, "").await.map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    };
+
+    store_fn("relay_stun", stun).await?;
+    store_fn("relay_turn", turn).await?;
+    store_fn("relay_user", username).await?;
+    store_fn("relay_pass", password).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_relay_config() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "relay_stun": store::get_setting("relay_stun").await.unwrap_or(None).unwrap_or_default(),
+        "relay_turn": store::get_setting("relay_turn").await.unwrap_or(None).unwrap_or_default(),
+        "relay_user": store::get_setting("relay_user").await.unwrap_or(None).unwrap_or_default(),
+        "relay_pass": store::get_setting("relay_pass").await.unwrap_or(None).unwrap_or_default(),
+    }))
 }
 
 #[tauri::command]

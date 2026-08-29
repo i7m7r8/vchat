@@ -1,12 +1,20 @@
 Vchat is a peer-to-peer encrypted messenger that routes all traffic through the Tor network.
 
-Features:
-- End-to-end encrypted messaging with AES-256-GCM
-- X25519 key exchange with Noise Protocol
-- Tor hidden service for private connections
-- Group messaging
-- Message reactions
-- Disappearing messages with configurable TTL
-- QR code contact sharing
-- Dark theme UI
-- Open source and privacy-respecting
+Every peer runs an embedded Tor hidden service (pure-Rust Arti), so there are no servers, no tracking and no central collection of metadata.
+
+Security
+- End-to-end encryption with AES-256-GCM
+- X25519 key exchange over a Noise XX handshake
+- Ed25519 signatures on every message
+- Forward secrecy with ephemeral per-session keys
+- Your onion address is your identity, no registration needed
+
+Features
+- Text messaging with delivery/read receipts and typing indicators
+- Group messaging, reactions and disappearing messages
+- Voice and video calls, and screen sharing
+- File transfer and QR-code contact exchange
+- Embedded Tor: no external daemon, no special permissions
+- Dark, privacy-first UI
+
+Vchat is 100% open source (GPL-3.0-only) and collects no data.

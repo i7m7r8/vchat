@@ -1,0 +1,8 @@
+# Pinned toolchain for reproducible builds.
+# Both the GitHub Actions CI pipeline and the F-Droid build server install this
+# exact channel, so a given commit always produces the same binaries.
+# Per-job extra targets are added by the workflow that needs them
+# (Android / Apple targets are heavy and only installed where used).
+[toolchain]
+channel = "1.91.0"
+components = ["rustfmt", "clippy"]

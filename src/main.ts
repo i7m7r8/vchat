@@ -15,6 +15,18 @@ class VchatApp {
   mediaRecorder: MediaRecorder | null = null;
   audioChunks: Blob[] = [];
   recordingStartTime: number = 0;
+  callMediaStream: MediaStream | null = null;
+  callSeq: number = 0;
+  callVideoTimer: any = null;
+  remoteAudioCtx: AudioContext | null = null;
+  remoteVideoCanvas: HTMLCanvasElement | null = null;
+  remoteVideoCtx: CanvasRenderingContext2D | null = null;
+  isIncomingCall: boolean = false;
+  incomingPeerOnion: string | null = null;
+  activeCallPeerOnion: string | null = null;
+  activeCallIsVideo: boolean = false;
+  voiceQ: Blob[] = [];
+  voicePlaying: boolean = false;
 
   async init(): Promise<void> {
     try {
@@ -1155,17 +1167,28 @@ class VchatApp {
     });
 
     document.getElementById("call-video-btn")?.addEventListener("click", () => {
-      if (this.activeCallId) api.toggleVideo(this.activeCallId);
       const btn = document.getElementById("call-video-btn");
       btn?.classList.toggle("active");
+      if (this.activeCallId) api.toggleVideo(this.activeCallId);
     });
 
     document.getElementById("call-screen-btn")?.addEventListener("click", () => {
-      if (this.activeCallId) {
-        api.startScreenShare(this.activeCallId);
-      }
       const btn = document.getElementById("call-screen-btn");
-      btn?.classList.toggle("active");
+      const active = btn?.classList.toggle("active");
+      if (!this.activeCallId) return;
+      if (active) {
+        this.startScreenCapturing();
+      } else {
+        this.stopScreenCapturing();
+      }
+    });
+
+    document.getElementById("call-answer-btn")?.addEventListener("click", () => {
+      this.answerIncomingCall();
+    });
+
+    document.getElementById("call-decline-btn")?.addEventListener("click", () => {
+      this.declineIncomingCall();
     });
   }
 
@@ -1180,15 +1203,22 @@ class VchatApp {
       }
       this.activeCallId = callId;
       this.callSeconds = 0;
+      this.isIncomingCall = false;
+      this.incomingPeerOnion = null;
+      this.activeCallPeerOnion = this.currentContact.onion_address;
+      this.activeCallIsVideo = video;
 
       const overlay = document.getElementById("call-overlay");
       overlay?.classList.remove("hidden");
 
-      const nameEl = document.getElementById("call-peer-name");
+      const statusEl = document.getElementById("call-status");
+      if (statusEl) statusEl.textContent = "Ringing...";
+
+      const nameEl = document.getElementById("call-name");
       if (nameEl) nameEl.textContent = this.currentContact.display_name;
 
-      const typeEl = document.getElementById("call-type-label");
-      if (typeEl) typeEl.textContent = video ? "Video Call" : "Voice Call";
+      const incomingCtrls = document.getElementById("call-incoming-controls");
+      incomingCtrls?.classList.add("hidden");
 
       this.callTimerInterval = setInterval(() => {
         this.callSeconds++;
@@ -1203,24 +1233,227 @@ class VchatApp {
     }
   }
 
-  async endCall(): Promise<void> {
-    if (this.activeCallId) {
+  async answerIncomingCall(): Promise<void> {
+    if (!this.activeCallId || !this.incomingPeerOnion) return;
+    try {
+      await api.answerVideoCall(this.activeCallId);
+      const statusEl = document.getElementById("call-status");
+      if (statusEl) statusEl.textContent = "Connected";
+      const incomingCtrls = document.getElementById("call-incoming-controls");
+      incomingCtrls?.classList.add("hidden");
+      this.showToast("Call connected");
+      this.startCallMedia(this.activeCallIsVideo);
+    } catch (err) {
+      console.error("Failed to answer call:", err);
+      this.showToast("Failed to answer call");
+    }
+  }
+
+  async declineIncomingCall(): Promise<void> {
+    const callId = this.activeCallId;
+    const peer = this.incomingPeerOnion;
+    this.endCall();
+    if (callId && peer) {
+      try { await api.rejectCall(callId); } catch { /* ignore */ }
+    }
+    this.showToast("Call declined");
+  }
+
+  async startCallMedia(video: boolean): Promise<void> {
+    this.callSeq = 0;
+    // Capture local media (mic, and camera if video)
+    try {
+      const constraints: MediaStreamConstraints = { audio: true };
+      if (video) constraints.video = { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: "user" };
+      this.callMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      console.warn("Media capture partly failed:", err);
+      this.showToast("Microphone/camera not available");
+      return;
+    }
+
+    // Show video container for video calls
+    const vidContainer = document.getElementById("call-video-container");
+    if (vidContainer) {
+      if (video) {
+        vidContainer.classList.remove("hidden");
+        this.renderLocalVideo();
+      } else {
+        vidContainer.classList.add("hidden");
+      }
+    }
+
+    // Start sending the remote's frames timer (video) and audio packets
+    this.startVoiceStreaming();
+
+    if (video) {
+      this.startVideoStreaming();
+    }
+  }
+
+  startVoiceStreaming(): void {
+    this.startMicVoiceStream();
+  }
+
+  startMicVoiceStream(): void {
+    const stream = this.callMediaStream;
+    if (!stream || !this.activeCallId || !this.currentContact) return;
+    const micTracks = stream.getAudioTracks();
+    if (micTracks.length === 0) return;
+    const micStream = new MediaStream(micTracks);
+    this.mediaRecorder = new MediaRecorder(micStream, { mimeType: "audio/mp4" });
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) this.sendVoiceChunk(e.data);
+    };
+    this.mediaRecorder.start(500);
+  }
+
+  sendVoiceChunk(blob: Blob): void {
+    const callId = this.activeCallId;
+    const peer = this.activeCallPeerOnion;
+    if (!callId || !peer) return;
+    blob.arrayBuffer().then((buf) => {
+      const data = Array.from(new Uint8Array(buf));
+      const seq = this.callSeq++;
+      // Packetize in 500ms chunks -> send in ~8KB pieces over the wire
+      const chunkSize = 8000;
+      for (let i = 0; i < data.length; i += chunkSize) {
+        const piece = data.slice(i, i + chunkSize);
+        api.sendVoicePacket(peer, callId, seq, piece, 48000, 1).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
+  async startVideoStreaming(): Promise<void> {
+    this.stopVideoStreaming();
+    this.callVideoTimer = setInterval(() => {
+      this.captureAndSendFrame();
+    }, 500);
+  }
+
+  captureAndSendFrame(): void {
+    const callId = this.activeCallId;
+    const peer = this.activeCallPeerOnion;
+    const stream = this.callMediaStream;
+    if (!callId || !peer || !stream) return;
+    const videoTracks = stream.getVideoTracks();
+    if (videoTracks.length === 0) return;
+
+    const vidEl = document.createElement("video");
+    vidEl.srcObject = stream;
+    vidEl.muted = true;
+    vidEl.onloadedmetadata = () => {
+      vidEl.play();
+      const canvas = document.createElement("canvas");
+      canvas.width = 160;
+      canvas.height = 120;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(vidEl, 0, 0, 160, 120);
+      const jpeg = canvas.toDataURL("image/jpeg", 0.4);
+      const base64 = jpeg.split(",")[1];
+      if (!base64) return;
       try {
-        await api.endVideoCall(this.activeCallId);
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        api.sendVideoFrame(peer, callId, this.callSeq++, Array.from(bytes), 160, 120).catch(() => {});
+        // Mirror to local preview
+        const localCtx = (document.getElementById("call-local-video") as HTMLCanvasElement | null)?.getContext("2d");
+        if (localCtx) localCtx.drawImage(vidEl, 0, 0, 160, 120);
+      } catch { /* ignore */ }
+    };
+  }
+
+  async startScreenCapturing(): Promise<void> {
+    try {
+      const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+      this.stopVideoStreaming();
+      this.callVideoTimer = setInterval(() => {
+        const callId = this.activeCallId;
+        const peer = this.activeCallPeerOnion;
+        if (!callId || !peer) return;
+        const vidEl = document.createElement("video");
+        vidEl.srcObject = screenStream;
+        vidEl.muted = true;
+        vidEl.onloadedmetadata = () => {
+          vidEl.play();
+          const canvas = document.createElement("canvas");
+          canvas.width = 200;
+          canvas.height = 150;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          ctx.drawImage(vidEl, 0, 0, 200, 150);
+          const jpeg = canvas.toDataURL("image/jpeg", 0.3);
+          const base64 = jpeg.split(",")[1];
+          if (!base64) return;
+          try {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            api.sendScreenFrame(peer, callId, this.callSeq++, Array.from(bytes), 200, 150).catch(() => {});
+          } catch { }
+        };
+      }, 700);
+    } catch (err) {
+      this.showToast("Screen share not available");
+    }
+  }
+
+  stopVideoStreaming(): void {
+    if (this.callVideoTimer) {
+      clearInterval(this.callVideoTimer);
+      this.callVideoTimer = null;
+    }
+  }
+
+  async endCall(): Promise<void> {
+    const callId = this.activeCallId;
+    if (callId) {
+      try {
+        await api.endVideoCall(callId);
       } catch (err) {
         console.error("Failed to end call:", err);
       }
     }
 
+    // Stop media resources
+    this.callMediaStream?.getTracks().forEach(t => t.stop());
+    this.callMediaStream = null;
+    this.stopVideoStreaming();
+    if (this.mediaRecorder) {
+      try { this.mediaRecorder.stop(); } catch { /* ignore */ }
+      this.mediaRecorder = null;
+    }
+
     this.activeCallId = null;
+    this.isIncomingCall = false;
+    this.incomingPeerOnion = null;
+    this.activeCallPeerOnion = null;
+    this.activeCallIsVideo = false;
+    this.callSeq = 0;
+    this.voiceQ = [];
+    this.voicePlaying = false;
     clearInterval(this.callTimerInterval);
     this.callTimerInterval = null;
     this.callSeconds = 0;
 
     const overlay = document.getElementById("call-overlay");
     overlay?.classList.add("hidden");
+    const vidContainer = document.getElementById("call-video-container");
+    vidContainer?.classList.add("hidden");
+    const remoteC = document.getElementById("call-remote-container");
+    if (remoteC) {
+      const img = remoteC.querySelector("img");
+      if (img) img.remove();
+    }
 
     await this.loadCallHistory();
+  }
+
+  renderLocalVideo(): void {
+    const vidContainer = document.getElementById("call-video-container");
+    if (vidContainer) vidContainer.classList.remove("hidden");
   }
 
   setupContextMenu(): void {
@@ -1482,21 +1715,46 @@ class VchatApp {
     listen<{call_id: string, peer_onion: string, call_type: string}>("incoming-call", (event) => {
       const { call_id, peer_onion, call_type } = event.payload;
       this.activeCallId = call_id;
+      this.isIncomingCall = true;
+      this.incomingPeerOnion = peer_onion;
+      this.activeCallPeerOnion = peer_onion;
+      const isVideo = String(call_type).toLowerCase().startsWith("video");
+      this.activeCallIsVideo = isVideo;
+      this.callSeconds = 0;
 
       const overlay = document.getElementById("call-overlay");
       overlay?.classList.remove("hidden");
 
-      const nameEl = document.getElementById("call-peer-name");
+      const vidContainer = document.getElementById("call-video-container");
+      vidContainer?.classList.add("hidden");
+
+      const nameEl = document.getElementById("call-name");
       if (nameEl) nameEl.textContent = peer_onion.slice(0, 16);
 
-      const typeEl = document.getElementById("call-type-label");
-      if (typeEl) typeEl.textContent = `Incoming ${call_type} call`;
+      const statusEl = document.getElementById("call-status");
+      if (statusEl) statusEl.textContent = "Incoming call...";
+
+      const incomingCtrls = document.getElementById("call-incoming-controls");
+      incomingCtrls?.classList.remove("hidden");
+
+      // Start the incoming session so we can accept/decline over the wire
+      api.createIncomingCall(call_id, peer_onion, isVideo ? "video" : "voice").catch((err) => {
+        console.error("createIncomingCall failed:", err);
+      });
 
       this.showToast(`Incoming ${call_type} call from ${peer_onion.slice(0, 16)}`);
     });
 
     listen("call-accepted", () => {
+      const statusEl = document.getElementById("call-status");
+      if (statusEl) statusEl.textContent = "Connected";
+      const incomingCtrls = document.getElementById("call-incoming-controls");
+      incomingCtrls?.classList.add("hidden");
       this.showToast("Call connected");
+      this.isIncomingCall = false;
+      this.incomingPeerOnion = null;
+      // Once peer accepts, begin our own media send/receive
+      this.startCallMedia(this.activeCallIsVideo);
     });
 
     listen("call-rejected", () => {
@@ -1507,6 +1765,18 @@ class VchatApp {
     listen("call-ended", () => {
       this.showToast("Call ended");
       this.endCall();
+    });
+
+    listen<any>("voice-packet", (event) => {
+      this.handleVoicePacket(event.payload);
+    });
+
+    listen<any>("video-frame", (event) => {
+      this.handleVideoFrame(event.payload);
+    });
+
+    listen<any>("screen-frame", (event) => {
+      this.handleScreenFrame(event.payload);
     });
 
     listen<any>("new-group-message", (event) => {
@@ -1534,6 +1804,58 @@ class VchatApp {
         }
       }
     });
+  }
+
+  handleVoicePacket(payload: any): void {
+    if (!payload || !payload.data || !Array.isArray(payload.data)) return;
+    const bytes = new Uint8Array(payload.data);
+    const blob = new Blob([bytes], { type: "audio/mp4" });
+    this.voiceQ.push(blob);
+    if (!this.voicePlaying) this.playVoiceQueue();
+  }
+
+  playVoiceQueue(): void {
+    if (this.voiceQ.length === 0) {
+      this.voicePlaying = false;
+      return;
+    }
+    this.voicePlaying = true;
+    const blob = this.voiceQ.shift()!;
+    const audioUrl = URL.createObjectURL(blob);
+    const audio = new Audio(audioUrl);
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      this.playVoiceQueue();
+    };
+    audio.play().catch(() => {
+      this.playVoiceQueue();
+    });
+  }
+
+  handleVideoFrame(payload: any): void {
+    if (!payload || !payload.data) return;
+    this.renderRemoteFrame(payload.data, "call-remote-container", false);
+  }
+
+  handleScreenFrame(payload: any): void {
+    if (!payload || !payload.data) return;
+    this.renderRemoteFrame(payload.data, "call-remote-container", true);
+  }
+
+  renderRemoteFrame(dataArr: number[], containerId: string, _isScreen: boolean): void {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const bytes = new Uint8Array(dataArr);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    const dataUrl = "data:image/jpeg;base64," + btoa(binary);
+
+    let img = container.querySelector("img") as HTMLImageElement | null;
+    if (!img) {
+      img = document.createElement("img");
+      container.appendChild(img);
+    }
+    img.src = dataUrl;
   }
 
   setupSettings(): void {

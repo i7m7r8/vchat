@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# Proposed F-Droid metadata for Vchat.
+#
+# This file is submitted upstream to the F-Droid repo (fdroiddata) at
+# https://gitlab.com/fdroid/fdroiddata. It is validated on every push by the
+# `fdroid-check` job in .github/workflows/build.yml.
+#
+# NOTE FOR F-DROID MAINTAINERS: Vchat is built with Tauri 2 (Rust + a web
+# frontend). The build server additionally needs the Rust toolchain pinned in
+# rust-toolchain.toml (1.91.0) and Node.js, and network access to
+# static.rust-lang.org / crates.io and plugins.gradle.org while building.
+# The committed src-tauri/gen/android Gradle project invokes the Tauri Gradle
+# plugin which compiles the Rust backend and the frontend itself.
+# ---------------------------------------------------------------------------
+Categories:
+  - Internet
+License: GPL-3.0-only
+WebSite: https://github.com/i7m7r8/vchat
+SourceCode: https://github.com/i7m7r8/vchat
+IssueTracker: https://github.com/i7m7r8/vchat/issues
+Changelog: https://github.com/i7m7r8/vchat/releases
+
+Name: Vchat
+AutoName: Vchat
+Summary: P2P encrypted messenger over Tor
+Description: |
+  Vchat is a peer-to-peer encrypted messenger that routes all traffic
+  through the Tor network. Every peer runs an embedded Tor hidden service
+  via the pure-Rust Arti library, so there are no servers, no tracking and
+  no central collection of metadata.
+
+  All messages are end-to-end encrypted with AES-256-GCM. Keys are
+  exchanged with X25519 over a Noise XX handshake, and every message is
+  signed with Ed25519.
+
+  Features:
+  * Text messaging with delivery and read receipts and typing indicators
+  * Group messaging, message reactions, disappearing messages
+  * Voice and video calls and screen sharing
+  * File transfer and QR-code contact exchange
+  * Embedded Tor, no external daemon, no special permissions
+  * 100 percent open source under the GPL-3.0-only license
+
+  Vchat requires no registration and collects no data. Identities are
+  random Ed25519/X25519 keypairs, and your onion address is your identity.
+
+RepoType: git
+Repo: https://github.com/i7m7r8/vchat
+
+Binaries: https://github.com/i7m7r8/vchat/releases/download/v%v/vchat-android-universal.apk
+
+Builds:
+  - versionName: 2.0.0
+    versionCode: 2000000
+    commit: v2.0.0
+    subdir: src-tauri/gen/android
+    sudo:
+      - curl
+      - openjdk-17-jdk-headless
+      - nodejs
+    init:
+      - bash ../../scripts/android-prepare.sh
+    build:
+      - |
+        set -e
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain 1.91.0 -y
+        export PATH="$HOME/.cargo/bin:$PATH"
+        rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+    gradle:
+      - assembleRelease

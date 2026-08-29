@@ -1,0 +1,6 @@
+Version 2.0.0
+- Voice, video and screen-share calls with inbox-style ring UI
+- ICE/UDP media transport foundation for low-latency calls
+- Call invite, accept, reject and end signaling over Tor
+- QR code contact scan with jsQR
+- Various stability and privacy fixes

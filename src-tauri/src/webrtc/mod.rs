@@ -4,9 +4,38 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
+use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
+
+pub mod ice;
+pub use ice::{check_connectivity, IceCandidate, RelayConfig};
+
+/// A per-call UDP media transport session (Jami-style ICE/UDP).
+pub struct MediaSession {
+    pub socket: Arc<UdpSocket>,
+    pub local: std::net::SocketAddr,
+    pub local_candidates: Vec<IceCandidate>,
+    pub remote_candidates: Vec<IceCandidate>,
+    pub remote: Option<std::net::SocketAddr>,
+    pub connected: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MediaSessionInfo {
+    pub local_addr: String,
+    pub local_candidates: Vec<String>,
+    pub connected: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum MediaFrameKind {
+    Video,
+    Screen,
+    Voice,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum CallType {
@@ -57,6 +86,7 @@ pub struct CallLogEntry {
 pub struct WebRTCState {
     pub active_calls: HashMap<String, CallSession>,
     pub call_history: Vec<CallLogEntry>,
+    pub media_sessions: HashMap<String, MediaSession>,
 }
 
 impl WebRTCState {
@@ -64,6 +94,7 @@ impl WebRTCState {
         Self {
             active_calls: HashMap::new(),
             call_history: Vec::new(),
+            media_sessions: HashMap::new(),
         }
     }
 }
@@ -154,6 +185,25 @@ pub async fn start_audio_call(state: SharedWebRTCState, recipient_onion: &str) -
     s.active_calls.insert(call_id.clone(), session.clone());
 
     establish_call_connection(state.clone(), &call_id).await?;
+    Ok(session)
+}
+
+pub async fn establish_incoming_call(
+    state: SharedWebRTCState,
+    call_id: &str,
+    peer_onion: &str,
+    call_type: CallType,
+) -> Result<CallSession> {
+    let mut session = build_session(call_id, peer_onion, false, call_type);
+    if call_type == CallType::Audio {
+        session.video_enabled = false;
+    }
+    session.status = CallStatus::Ringing;
+
+    info!(call_id = %call_id, peer = %peer_onion, "incoming call created (ringing)");
+
+    let mut s = state.write().await;
+    s.active_calls.insert(call_id.to_string(), session.clone());
     Ok(session)
 }
 
@@ -364,6 +414,7 @@ pub async fn cleanup_old_calls(state: SharedWebRTCState) -> Result<()> {
             };
             s.call_history.push(entry);
         }
+        s.media_sessions.remove(&id);
     }
 
     if !stale_ids.is_empty() {
@@ -371,4 +422,218 @@ pub async fn cleanup_old_calls(state: SharedWebRTCState) -> Result<()> {
     }
 
     Ok(())
+}
+
+// ── Jami-style ICE/UDP media transport ──────────────────────────────────────
+
+/// Bind a UDP socket for the call and gather ICE candidates (host, plus
+/// server-reflexive and relayed when a self-hostable STUN/TURN is configured).
+pub async fn init_media_session(
+    state: SharedWebRTCState,
+    call_id: &str,
+    relay: RelayConfig,
+    app: tauri::AppHandle,
+) -> Result<MediaSessionInfo> {
+    let mut s = state.write().await;
+    if s.media_sessions.contains_key(call_id) {
+        let existing = s.media_sessions.get(call_id).unwrap();
+        return Ok(MediaSessionInfo {
+            local_addr: existing.local.to_string(),
+            local_candidates: existing.local_candidates.iter().map(|c| c.to_string()).collect(),
+            connected: existing.connected,
+        });
+    }
+
+    let socket = UdpSocket::bind("0.0.0.0:0").await?;
+    let local = socket.local_addr()?;
+    let socket = Arc::new(socket);
+
+    let local_candidates = ice::gather_candidates(&socket, &relay).await;
+
+    let session = MediaSession {
+        socket: socket.clone(),
+        local,
+        local_candidates: local_candidates.clone(),
+        remote_candidates: Vec::new(),
+        remote: None,
+        connected: false,
+    };
+    s.media_sessions.insert(call_id.to_string(), session);
+    drop(s);
+
+    spawn_media_receiver(state.clone(), call_id.to_string(), socket, app);
+
+    Ok(MediaSessionInfo {
+        local_addr: local.to_string(),
+        local_candidates: local_candidates.iter().map(|c| c.to_string()).collect(),
+        connected: false,
+    })
+}
+
+/// Background task that reassembles chunked UDP media frames and emits them to
+/// the frontend as `udp-media-frame` events (Jami-style direct media path).
+fn spawn_media_receiver(
+    state: SharedWebRTCState,
+    call_id: String,
+    socket: Arc<UdpSocket>,
+    app: tauri::AppHandle,
+) {
+    tauri::async_runtime::spawn(async move {
+        // Partial frame reassembly buffers, keyed by frame_id.
+        let mut partials: HashMap<u32, (u32, std::collections::BTreeMap<u32, Vec<u8>>)> =
+            HashMap::new();
+        let mut last_frame = 0u32;
+        let mut buf = vec![0u8; 4096];
+        loop {
+            let n = match socket.recv(&mut buf).await {
+                Ok(n) => n,
+                Err(_) => break,
+            };
+            if !is_active(&state, &call_id).await {
+                break;
+            }
+            let Some(chunk) = ice::decode_chunk(&buf[..n]) else {
+                continue;
+            };
+            let entry = partials
+                .entry(chunk.frame_id)
+                .or_insert((chunk.total, std::collections::BTreeMap::new()));
+            entry.1.insert(chunk.offset, chunk.data);
+
+            // Reassemble when all pieces are present (skip zero-length frames).
+            if chunk.total == 0 {
+                continue;
+            }
+            let (total, pieces) = entry;
+            let got: u32 = pieces.values().map(|p| p.len() as u32).sum();
+            if got == *total {
+                let mut frame = Vec::with_capacity(*total as usize);
+                for (_off, piece) in pieces {
+                    frame.extend_from_slice(piece);
+                }
+                partials.remove(&chunk.frame_id);
+                if chunk.frame_id > last_frame || last_frame == 0 {
+                    last_frame = chunk.frame_id;
+                }
+                if let Err(e) = app.emit("udp-media-frame", serde_json::json!({
+                    "call_id": call_id,
+                    "frame_id": chunk.frame_id,
+                    "data": frame,
+                })) {
+                    warn!("Failed to emit udp-media-frame: {e}");
+                }
+                if partials.len() > 64 {
+                    partials.clear();
+                }
+            }
+        }
+    });
+}
+
+async fn is_active(state: &SharedWebRTCState, call_id: &str) -> bool {
+    let s = state.read().await;
+    s.media_sessions.contains_key(call_id)
+}
+
+pub async fn get_media_session(state: SharedWebRTCState, call_id: &str) -> Result<MediaSessionInfo> {
+    let s = state.read().await;
+    let ms = s
+        .media_sessions
+        .get(call_id)
+        .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
+    Ok(MediaSessionInfo {
+        local_addr: ms.local.to_string(),
+        local_candidates: ms.local_candidates.iter().map(|c| c.to_string()).collect(),
+        connected: ms.connected,
+    })
+}
+
+/// Record a remote candidate received over the Tor signaling channel.
+pub async fn add_remote_ice_candidate(
+    state: SharedWebRTCState,
+    call_id: &str,
+    candidate: &str,
+) -> Result<()> {
+    let Some(cand) = ice::parse_candidate(candidate) else {
+        warn!(candidate = %candidate, "ignoring malformed ICE candidate");
+        return Ok(());
+    };
+    let mut s = state.write().await;
+    let ms = s
+        .media_sessions
+        .get_mut(call_id)
+        .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
+    if !ms.remote_candidates.iter().any(|c| c.addr == cand.addr) {
+        ms.remote_candidates.push(cand);
+    }
+    Ok(())
+}
+
+/// Run ICE connectivity checks against the remote candidates and remember the
+/// working peer address so media can be sent over UDP.
+pub async fn run_ice_connect(
+    state: SharedWebRTCState,
+    call_id: &str,
+) -> Result<bool> {
+    let mut s = state.write().await;
+    let ms = s
+        .media_sessions
+        .get_mut(call_id)
+        .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
+
+    if ms.connected {
+        return Ok(true);
+    }
+
+    // Prefer srflx/relay pairs from the remote, then host.
+    let mut ordered: Vec<IceCandidate> = ms.remote_candidates.clone();
+    ordered.sort_by_key(|c| std::cmp::Reverse(c.priority));
+
+    for cand in ordered {
+        let check = check_connectivity(&ms.socket, cand.addr).await;
+        if check {
+            ms.remote = Some(cand.addr);
+            ms.connected = true;
+            info!(call_id = %call_id, peer = %cand.addr, "ICE connectivity established via {}", cand.candidate_type_str());
+            return Ok(true);
+        }
+    }
+    debug!(call_id = %call_id, "ICE connectivity checks failed for all remote candidates");
+    Ok(false)
+}
+
+impl IceCandidate {
+    fn candidate_type_str(&self) -> &'static str {
+        match self.candidate_type {
+            ice::CandidateType::Host => "host",
+            ice::CandidateType::Srflx => "srflx",
+            ice::CandidateType::Relay => "relay",
+        }
+    }
+}
+
+/// Send media data over the established UDP path. Returns false if no UDP path
+/// is connected yet (caller should fall back to the Tor path).
+pub async fn send_media_frame(
+    state: SharedWebRTCState,
+    call_id: &str,
+    frame_id: u32,
+    data: &[u8],
+) -> Result<bool> {
+    let s = state.read().await;
+    let ms = s
+        .media_sessions
+        .get(call_id)
+        .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
+    let Some(remote) = ms.remote else {
+        return Ok(false);
+    };
+    ice::send_frame(&ms.socket, remote, frame_id, data).await?;
+    Ok(true)
+}
+
+/// Tear down the UDP media session for a call.
+pub async fn close_media_session(state: SharedWebRTCState, call_id: &str) {
+    let mut s = state.write().await;
+    s.media_sessions.remove(call_id);
 }

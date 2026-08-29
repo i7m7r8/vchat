@@ -7,10 +7,12 @@ use crate::commands::{
 use crate::crypto;
 use crate::crypto::store;
 use crate::messaging::protocol::{
-    create_wire_message, payload_to_json, serialize_wire_message, DeliveryReceiptPayload,
+    create_wire_message, payload_to_json, serialize_wire_message, CallAcceptPayload,
+    CallEndPayload, CallInvitePayload, CallRejectPayload, CallType, DeliveryReceiptPayload,
     FileChunkPayload, FileMetaPayload, GroupCreatePayload, GroupMemberInfo,
-    GroupMessagePayload, ReactionPayload, ReadReceiptPayload, TextPayload, TypingPayload,
-    VoiceNotePayload, WireMessageType,
+    GroupMessagePayload, IceCandidatePayload, ReactionPayload, ReadReceiptPayload,
+    ScreenFramePayload, TextPayload, TypingPayload, VideoFramePayload, VoiceNotePayload,
+    VoicePacketPayload, WireMessageType,
 };
 use crate::error::audit_log;
 use tracing::{debug, info, warn};
@@ -1053,6 +1055,222 @@ pub async fn send_forward(
     );
 
     Ok(message)
+}
+
+// ── Calls & Media ───────────────────────────────────────────────────────────
+
+pub async fn send_call_invite(
+    recipient_onion: &str,
+    call_id: &str,
+    call_type: CallType,
+    sdp_offer: &str,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = CallInvitePayload {
+        call_id: call_id.to_string(),
+        call_type,
+        sdp_offer: sdp_offer.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::CallInvite,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent call invite to {recipient_onion}: {call_id}");
+    audit_log("call_invite_sent", &format!("to={}, call_id={}", recipient_onion, call_id));
+    Ok(())
+}
+
+pub async fn send_call_accept(recipient_onion: &str, call_id: &str) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = CallAcceptPayload {
+        call_id: call_id.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::CallAccept,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent call accept to {recipient_onion}: {call_id}");
+    Ok(())
+}
+
+pub async fn send_call_reject(recipient_onion: &str, call_id: &str) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = CallRejectPayload {
+        call_id: call_id.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::CallReject,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent call reject to {recipient_onion}: {call_id}");
+    Ok(())
+}
+
+pub async fn send_call_end(recipient_onion: &str, call_id: &str) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = CallEndPayload {
+        call_id: call_id.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::CallEnd,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    info!("Sent call end to {recipient_onion}: {call_id}");
+    Ok(())
+}
+
+pub async fn send_voice_packet(
+    recipient_onion: &str,
+    call_id: &str,
+    seq: u64,
+    data: &[u8],
+    sample_rate: u32,
+    channels: u8,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = VoicePacketPayload {
+        call_id: call_id.to_string(),
+        seq,
+        data: data.to_vec(),
+        sample_rate,
+        channels,
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::VoicePacket,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        seq,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    Ok(())
+}
+
+pub async fn send_video_frame(
+    recipient_onion: &str,
+    call_id: &str,
+    seq: u64,
+    data: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = VideoFramePayload {
+        call_id: call_id.to_string(),
+        seq,
+        data: data.to_vec(),
+        width,
+        height,
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::VideoFrame,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        seq,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    Ok(())
+}
+
+pub async fn send_screen_frame(
+    recipient_onion: &str,
+    call_id: &str,
+    seq: u64,
+    data: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = ScreenFramePayload {
+        call_id: call_id.to_string(),
+        seq,
+        data: data.to_vec(),
+        width,
+        height,
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::ScreenFrame,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        seq,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    Ok(())
+}
+
+pub async fn send_ice_candidate(recipient_onion: &str, call_id: &str, candidate: &str) -> Result<()> {
+    let signing_key = load_signing_key_or_bail().await?;
+
+    let payload = IceCandidatePayload {
+        call_id: call_id.to_string(),
+        candidate: candidate.to_string(),
+    };
+    let payload_bytes = payload_to_json(&payload)?;
+
+    let wire_msg = create_wire_message(
+        &signing_key.signing_key(),
+        &signing_key.verifying_key,
+        WireMessageType::IceCandidate,
+        payload_bytes,
+        uuid::Uuid::new_v4().to_string(),
+        0,
+    )?;
+    let wire_bytes = serialize_wire_message(&wire_msg)?;
+    try_send_wire(recipient_onion, &wire_bytes).await;
+    Ok(())
 }
 
 // ── Cleanup ─────────────────────────────────────────────────────────────────

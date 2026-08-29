@@ -8,8 +8,10 @@ use tokio::net::TcpListener;
 use tracing::{error, info, warn};
 
 use crate::messaging::protocol::{
-    deserialize_wire_message, serialize_wire_message, CallInvitePayload, HeartbeatPayload,
-    TextPayload, TypingPayload, WireMessage, WireMessageType,
+    deserialize_wire_message, serialize_wire_message, CallAcceptPayload, CallEndPayload,
+    CallInvitePayload, CallRejectPayload, HeartbeatPayload, IceCandidatePayload,
+    ScreenFramePayload, TextPayload, TypingPayload, VideoFramePayload, VoicePacketPayload,
+    WireMessage, WireMessageType,
 };
 
 static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
@@ -163,6 +165,10 @@ async fn handle_connection(mut stream: tokio::net::TcpStream, addr: std::net::So
         WireMessageType::GroupUpdate => handle_group_update(&wire_msg, &addr).await,
         WireMessageType::VoiceNote => handle_voice_note(&wire_msg, &addr).await,
         WireMessageType::Forward => handle_forward(&wire_msg, &addr).await,
+        WireMessageType::VoicePacket => handle_voice_packet(&wire_msg, &addr).await,
+        WireMessageType::VideoFrame => handle_video_frame(&wire_msg, &addr).await,
+        WireMessageType::ScreenFrame => handle_screen_frame(&wire_msg, &addr).await,
+        WireMessageType::IceCandidate => handle_ice_candidate(&wire_msg, &addr).await,
         _ => handle_default(&wire_msg, &addr).await,
     };
 
@@ -277,7 +283,7 @@ async fn handle_call_invite(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
     if let Some(app) = APP_HANDLE.get() {
         if let Err(e) = app.emit("incoming-call", serde_json::json!({
             "call_id": call_payload.call_id,
-            "caller_onion": sender_onion,
+            "peer_onion": sender_onion,
             "call_type": format!("{:?}", call_payload.call_type).to_lowercase(),
             "sdp_offer": call_payload.sdp_offer,
         })) {
@@ -304,10 +310,13 @@ async fn handle_call_invite(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 
 async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let sender_onion = derive_sender_onion(msg)?;
+    let payload: CallAcceptPayload = serde_json::from_slice(&msg.payload)
+        .unwrap_or(CallAcceptPayload { call_id: msg.message_id.clone() });
 
     if let Some(app) = APP_HANDLE.get() {
         if let Err(e) = app.emit("call-accepted", serde_json::json!({
-            "sender_onion": sender_onion,
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
             "message_id": msg.message_id,
         })) {
             warn!("Failed to emit call-accepted: {e}");
@@ -316,6 +325,7 @@ async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 
     tracing::info!(
         target: "vchat::calls",
+        call_id = %payload.call_id,
         from = %sender_onion,
         sequence = msg.sequence,
         "CallAccept received from {addr}"
@@ -326,10 +336,13 @@ async fn handle_call_accept(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 
 async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let sender_onion = derive_sender_onion(msg)?;
+    let payload: CallRejectPayload = serde_json::from_slice(&msg.payload)
+        .unwrap_or(CallRejectPayload { call_id: msg.message_id.clone() });
 
     if let Some(app) = APP_HANDLE.get() {
         if let Err(e) = app.emit("call-rejected", serde_json::json!({
-            "sender_onion": sender_onion,
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
             "message_id": msg.message_id,
         })) {
             warn!("Failed to emit call-rejected: {e}");
@@ -338,6 +351,7 @@ async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 
     tracing::info!(
         target: "vchat::calls",
+        call_id = %payload.call_id,
         from = %sender_onion,
         sequence = msg.sequence,
         "CallReject received from {addr}"
@@ -348,10 +362,13 @@ async fn handle_call_reject(msg: &WireMessage, addr: &std::net::SocketAddr) -> a
 
 async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
     let sender_onion = derive_sender_onion(msg)?;
+    let payload: CallEndPayload = serde_json::from_slice(&msg.payload)
+        .unwrap_or(CallEndPayload { call_id: msg.message_id.clone() });
 
     if let Some(app) = APP_HANDLE.get() {
         if let Err(e) = app.emit("call-ended", serde_json::json!({
-            "sender_onion": sender_onion,
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
             "message_id": msg.message_id,
         })) {
             warn!("Failed to emit call-ended: {e}");
@@ -360,9 +377,99 @@ async fn handle_call_end(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyh
 
     tracing::info!(
         target: "vchat::calls",
+        call_id = %payload.call_id,
         from = %sender_onion,
         sequence = msg.sequence,
         "CallEnd received from {addr}"
+    );
+
+    build_ack_response(msg).await
+}
+
+async fn handle_voice_packet(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: VoicePacketPayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid VoicePacketPayload: {e}"))?;
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("voice-packet", serde_json::json!({
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
+            "seq": payload.seq,
+            "data": payload.data,
+            "sample_rate": payload.sample_rate,
+            "channels": payload.channels,
+        })) {
+            warn!("Failed to emit voice-packet: {e}");
+        }
+    }
+
+    build_ack_response(msg).await
+}
+
+async fn handle_video_frame(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: VideoFramePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid VideoFramePayload: {e}"))?;
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("video-frame", serde_json::json!({
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
+            "seq": payload.seq,
+            "data": payload.data,
+            "width": payload.width,
+            "height": payload.height,
+        })) {
+            warn!("Failed to emit video-frame: {e}");
+        }
+    }
+
+    build_ack_response(msg).await
+}
+
+async fn handle_screen_frame(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: ScreenFramePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid ScreenFramePayload: {e}"))?;
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("screen-frame", serde_json::json!({
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
+            "seq": payload.seq,
+            "data": payload.data,
+            "width": payload.width,
+            "height": payload.height,
+        })) {
+            warn!("Failed to emit screen-frame: {e}");
+        }
+    }
+
+    build_ack_response(msg).await
+}
+
+async fn handle_ice_candidate(msg: &WireMessage, addr: &std::net::SocketAddr) -> anyhow::Result<Vec<u8>> {
+    let payload: IceCandidatePayload = serde_json::from_slice(&msg.payload)
+        .map_err(|e| anyhow::anyhow!("Invalid IceCandidatePayload: {e}"))?;
+    let sender_onion = derive_sender_onion(msg)?;
+
+    if let Some(app) = APP_HANDLE.get() {
+        if let Err(e) = app.emit("ice-candidate", serde_json::json!({
+            "call_id": payload.call_id,
+            "peer_onion": sender_onion,
+            "candidate": payload.candidate,
+        })) {
+            warn!("Failed to emit ice-candidate: {e}");
+        }
+    }
+
+    tracing::info!(
+        target: "vchat::calls",
+        call_id = %payload.call_id,
+        from = %sender_onion,
+        candidate = %payload.candidate,
+        "ICE candidate received from {addr}"
     );
 
     build_ack_response(msg).await

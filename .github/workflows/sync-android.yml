@@ -1,0 +1,65 @@
+# -----------------------------------------------------------------------------
+# sync-android.yml — bootstrap & verify generated sources on GitHub.
+#
+# All building happens on GitHub (this project is developed on mobile devices,
+# so no local toolchains are ever required). This workflow:
+#   1. Generates a Cargo.lock from the pinned toolchain and commits any changes
+#      (a committed lockfile is required by the F-Droid reproducible-build
+#      pipeline).
+#   2. If src-tauri/gen/android is missing, generates it with
+#      `tauri android init` + scripts/android-prepare.sh and commits it, so the
+#      F-Droid recipe can build the committed Gradle project directly.
+#
+# Pushes made with the repository GITHUB_TOKEN do not re-trigger this workflow,
+# so there is no infinite loop.
+# -----------------------------------------------------------------------------
+name: Sync generated sources
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@master
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;${ANDROID_NDK_VERSION:-27.0.12077973}"
+
+      - name: Generate Cargo.lock
+        working-directory: src-tauri
+        run: |
+          cargo generate-lockfile
+          # sanity: the resolved dependency graph must type-check cleanly
+          cargo metadata --format-version 1 >/dev/null
+
+      - run: npm install
+
+      - name: Generate Android project if missing
+        run: bash scripts/android-prepare.sh
+
+      - name: Commit generated files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: sync Cargo.lock and Android project (auto)"
+          file_pattern: "src-tauri/Cargo.lock src-tauri/gen/android"
+          skip_dirty_check: false

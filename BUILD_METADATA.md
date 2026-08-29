@@ -42,14 +42,33 @@ No proprietary dependencies, no tracking, no analytics.
 
 ### Reproducible Builds
 
-The CI/CD pipeline (.github/workflows/build.yml) uses fixed toolchain versions:
-- Rust: stable
-- Node.js: 20
-- Android NDK: 26
+Rust toolchain is pinned in `rust-toolchain.toml` (channel `1.91.0`, with
+`rustfmt`/`clippy`). CI and the F-Droid recipe install exactly this channel.
+
+`src-tauri/Cargo.lock` is committed; it is generated once by
+`.github/workflows/sync-android.yml` (which also commits the generated
+`src-tauri/gen/android` Gradle project when it changes).
+
+The Android build is deterministic:
+
+- fixed Rust toolchain (`rust-toolchain.toml`)
+- committed `Cargo.lock` (pinned dependency graph)
+- fixed Node.js (22) and `npm` lockfile on CI
+- fixed Android SDK/NDK: `NDK 27.0.12077973`, Java 17
+- `scripts/android-prepare.sh` injects runtime permissions and derives the
+  numeric `versionCode` from `src-tauri/Cargo.toml`
+  (`MAJOR*1_000_000 + MINOR*1_000 + PATCH`)
+- AGP reproducible flags: `isPreserveFileTimestamps = false`,
+  `isConservativeR8 = true`
+- single `universal` APK (aarch64 + armv7 + x86_64 + i686) so F-Droid can
+  publish one artifact
 
 ### Permissions
 
-The app requests no special permissions on Android. Tor connectivity is handled entirely in-process via the embedded Arti client (pure Rust Tor implementation).
+The app requests only what it needs for calls/networking on Android: `CAMERA`
+(mic/video calls), `RECORD_AUDIO`, and `INTERNET` (embedded Tor). Tor
+connectivity is handled entirely in-process via the embedded Arti client (pure
+Rust Tor implementation), so no extra privileges are required.
 
 ### Data Storage
 

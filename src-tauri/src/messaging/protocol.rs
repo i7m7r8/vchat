@@ -32,6 +32,10 @@ pub enum WireMessageType {
     Ack,
     VoiceNote,
     Forward,
+    VoicePacket,
+    VideoFrame,
+    ScreenFrame,
+    IceCandidate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +85,54 @@ pub struct CallInvitePayload {
     pub call_id: String,
     pub call_type: CallType,
     pub sdp_offer: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallAcceptPayload {
+    pub call_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallRejectPayload {
+    pub call_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallEndPayload {
+    pub call_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoicePacketPayload {
+    pub call_id: String,
+    pub seq: u64,
+    pub data: Vec<u8>,
+    pub sample_rate: u32,
+    pub channels: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoFramePayload {
+    pub call_id: String,
+    pub seq: u64,
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenFramePayload {
+    pub call_id: String,
+    pub seq: u64,
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IceCandidatePayload {
+    pub call_id: String,
+    pub candidate: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
