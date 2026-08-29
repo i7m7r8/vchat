@@ -9,19 +9,10 @@ pub mod messaging;
 pub mod tor;
 pub mod webrtc;
 
-// Jami-style P2P modules. These have real native dependencies (OpenDHT,
-// libsrtp2, libgit2) that are only compiled when the `jami-p2p` feature is
-// enabled. The default, serverless build uses the pure-Rust Tor transport and
-// the hand-rolled STUN/ICE/UDP media path in `webrtc`.
-#[cfg(feature = "jami-p2p")]
+// Jami-style P2P modules - now all pure-Rust, no native dependencies.
+// `dht` (Kademlia), `swarm` (Git-like conversations), and `webrtc` (ICE+SRTP)
+// all compile in the default build.
 pub mod dht;
-#[cfg(feature = "jami-p2p")]
-pub mod ice;
-#[cfg(feature = "jami-p2p")]
-pub mod transport;
-#[cfg(feature = "jami-p2p")]
-pub mod signaling;
-#[cfg(feature = "jami-p2p")]
 pub mod swarm;
 
 use tracing_subscriber::EnvFilter;
@@ -107,6 +98,12 @@ pub fn run() {
             commands::delete_all_data,
             commands::get_settings,
             commands::update_settings,
+            commands::set_media_key,
+            commands::create_conference,
+            commands::join_conference,
+            commands::leave_conference,
+            commands::get_conference,
+            commands::forward_conference_media,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

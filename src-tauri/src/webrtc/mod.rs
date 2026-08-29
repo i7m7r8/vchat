@@ -12,6 +12,10 @@ use uuid::Uuid;
 
 pub mod ice;
 pub use ice::{check_connectivity, IceCandidate, RelayConfig};
+pub mod srtp;
+pub mod media;
+pub mod conference;
+pub use srtp::{SrtpContext, SrtpProfile};
 
 /// A per-call UDP media transport session (Jami-style ICE/UDP).
 pub struct MediaSession {
@@ -21,6 +25,8 @@ pub struct MediaSession {
     pub remote_candidates: Vec<IceCandidate>,
     pub remote: Option<std::net::SocketAddr>,
     pub connected: bool,
+    pub srtp_tx: Option<SrtpContext>,  // Outbound SRTP context
+    pub srtp_rx: Option<SrtpContext>,  // Inbound SRTP context
 }
 
 #[derive(Debug, Clone)]
@@ -461,6 +467,20 @@ pub async fn init_media_session(
     s.media_sessions.insert(call_id.to_string(), session);
     drop(s);
 
+    // Initialize SRTP contexts when the session connects (will be set via set_media_key)
+    let session = MediaSession {
+        socket: socket.clone(),
+        local,
+        local_candidates: local_candidates.clone(),
+        remote_candidates: Vec::new(),
+        remote: None,
+        connected: false,
+        srtp_tx: None,
+        srtp_rx: None,
+    };
+    s.media_sessions.insert(call_id.to_string(), session);
+    drop(s);
+
     spawn_media_receiver(state.clone(), call_id.to_string(), socket, app);
 
     Ok(MediaSessionInfo {
@@ -484,6 +504,7 @@ fn spawn_media_receiver(
             HashMap::new();
         let mut last_frame = 0u32;
         let mut buf = vec![0u8; 4096];
+        let mut srtp_rx: Option<SrtpContext> = None;
         loop {
             let n = match socket.recv(&mut buf).await {
                 Ok(n) => n,
@@ -512,13 +533,21 @@ fn spawn_media_receiver(
                     frame.extend_from_slice(piece);
                 }
                 partials.remove(&chunk.frame_id);
+                
+                // Unprotect with SRTP if available
+                let unprotected = if let Some(srtp) = &mut srtp_rx {
+                    srtp.unprotect_rtp(&frame).unwrap_or(frame)
+                } else {
+                    frame
+                };
+                
                 if chunk.frame_id > last_frame || last_frame == 0 {
                     last_frame = chunk.frame_id;
                 }
                 if let Err(e) = app.emit("udp-media-frame", serde_json::json!({
                     "call_id": call_id,
                     "frame_id": chunk.frame_id,
-                    "data": frame,
+                    "data": unprotected,
                 })) {
                     warn!("Failed to emit udp-media-frame: {e}");
                 }
@@ -612,23 +641,30 @@ impl IceCandidate {
     }
 }
 
-/// Send media data over the established UDP path. Returns false if no UDP path
-/// is connected yet (caller should fall back to the Tor path).
+/// Send media data over the established UDP path with SRTP protection.
+/// Returns false if no UDP path is connected yet (caller should fall back to the Tor path).
 pub async fn send_media_frame(
     state: SharedWebRTCState,
     call_id: &str,
     frame_id: u32,
     data: &[u8],
 ) -> Result<bool> {
-    let s = state.read().await;
+    let mut s = state.write().await;
     let ms = s
         .media_sessions
-        .get(call_id)
+        .get_mut(call_id)
         .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
     let Some(remote) = ms.remote else {
         return Ok(false);
     };
-    ice::send_frame(&ms.socket, remote, frame_id, data).await?;
+    
+    let mut protected = if let Some(srtp) = &mut ms.srtp_tx {
+        srtp.protect_rtp(data)
+    } else {
+        data.to_vec()
+    };
+    
+    ice::send_frame(&ms.socket, remote, frame_id, &protected).await?;
     Ok(true)
 }
 
@@ -636,4 +672,29 @@ pub async fn send_media_frame(
 pub async fn close_media_session(state: SharedWebRTCState, call_id: &str) {
     let mut s = state.write().await;
     s.media_sessions.remove(call_id);
+}
+
+/// Set the SRTP session key for a call (called after X3DH ratchet establishes a shared key).
+/// `shared_secret` should be a 32-byte key from the ratchet.
+/// `direction` 0 = outbound (we send), 1 = inbound (we receive).
+/// Uses AES-256-CTR-HMAC-SHA1-80 profile by default.
+pub async fn set_media_key(
+    state: SharedWebRTCState,
+    call_id: &str,
+    shared_secret: &[u8; 32],
+    ssrc: u32,
+) -> Result<()> {
+    let mut s = state.write().await;
+    let ms = s
+        .media_sessions
+        .get_mut(call_id)
+        .ok_or_else(|| anyhow::anyhow!("no media session for {call_id}"))?;
+    
+    // Create outbound (direction 0) and inbound (direction 1) contexts
+    let profile = SrtpProfile::Aes256CtrHmacSha1_80;
+    ms.srtp_tx = Some(SrtpContext::from_shared_secret(shared_secret, 0, ssrc, profile));
+    ms.srtp_rx = Some(SrtpContext::from_shared_secret(shared_secret, 1, ssrc, profile));
+    
+    info!(call_id = %call_id, "SRTP session keys initialized");
+    Ok(())
 }

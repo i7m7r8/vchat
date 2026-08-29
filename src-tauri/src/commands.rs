@@ -1490,3 +1490,85 @@ pub async fn update_settings(settings: serde_json::Value) -> Result<AppSettings,
 
     Ok(current)
 }
+
+/// Set SRTP media encryption key for a call (called after X3DH ratchet establishes shared secret)
+#[tauri::command]
+pub async fn set_media_key(
+    state: State<'_, SharedVchatState>,
+    call_id: String,
+    shared_secret: Vec<u8>, // 32-byte key from ratchet
+    ssrc: u32,
+) -> Result<(), String> {
+    if shared_secret.len() != 32 {
+        return Err("shared_secret must be 32 bytes".to_string());
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&shared_secret);
+    
+    webrtc::set_media_key(state.webrtc.clone(), &call_id, &key, ssrc)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Create a new conference
+#[tauri::command]
+pub async fn create_conference(
+    state: State<'_, SharedVchatState>,
+    host_onion: String,
+) -> Result<String, String> {
+    let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
+    let conf = mgr.create_conference(host_onion).await.map_err(|e| e.to_string())?;
+    Ok(conf.conference_id)
+}
+
+/// Join an existing conference
+#[tauri::command]
+pub async fn join_conference(
+    state: State<'_, SharedVchatState>,
+    conference_id: String,
+    peer_onion: String,
+) -> Result<(), String> {
+    let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
+    mgr.join_conference(&conference_id, peer_onion, uuid::Uuid::new_v4().to_string())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Leave a conference
+#[tauri::command]
+pub async fn leave_conference(
+    state: State<'_, SharedVchatState>,
+    conference_id: String,
+    peer_onion: String,
+) -> Result<(), String> {
+    let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
+    mgr.leave_conference(&conference_id, &peer_onion)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Get conference details
+#[tauri::command]
+pub async fn get_conference(
+    state: State<'_, SharedVchatState>,
+    conference_id: String,
+) -> Result<Option<webrtc::conference::Conference>, String> {
+    let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
+    Ok(mgr.get_conference(&conference_id).await)
+}
+
+/// Forward media in a conference
+#[tauri::command]
+pub async fn forward_conference_media(
+    state: State<'_, SharedVchatState>,
+    conference_id: String,
+    from_peer: String,
+    frame_id: u32,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
+    mgr.forward_media(&conference_id, &from_peer, frame_id, &data)
+        .await
+        .map_err(|e| e.to_string())
+}
