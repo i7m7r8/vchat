@@ -148,7 +148,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android NDK
         run: sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
-- name: Set up NDK toolchain
+      - name: Set up NDK toolchain
         run: |
           NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -mindepth 1 -type d | head -1)
           echo "NDK_DIR=$NDK_DIR"
