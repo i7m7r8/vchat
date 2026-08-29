@@ -30,11 +30,7 @@ const fmtBytes = (n: number): string => {
   if (n < 1073741824) return `${(n/1048576).toFixed(1)} MB`;
   return `${(n/1073741824).toFixed(1)} GB`;
 };
-const fmtDuration = (s: number): string => {
-  if (s < 60) return `${Math.floor(s)}s`;
-  const m = Math.floor(s/60); const r = Math.floor(s%60);
-  return `${m}m ${String(r).padStart(2,'0')}s`;
-};
+
 const avatarColor = (name: string): string => {
   const colors = ["#6366f1","#8b5cf6","#a855f7","#ec4899","#f43f5e","#f97316","#f59e0b","#84cc16","#22c55e","#10b981","#14b8a6","#06b6d4","#0ea5e9","#3b82f6"];
   let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -135,7 +131,6 @@ class VchatApp {
 
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
-  private recordingStart: number = 0;
   private typingTimeout: ReturnType<typeof setTimeout> | null = null;
   private replyTarget: Message | null = null;
   private modalStack: HTMLElement[] = [];
@@ -145,7 +140,6 @@ class VchatApp {
   private qrAnim: number | null = null;
 
   constructor() {
-    this.setupListeners();
     this.init();
   }
 
@@ -443,7 +437,7 @@ class VchatApp {
     if (!contact) { this.toast("Select a conversation first"); return; }
 
     try {
-      const msg = await api.sendMessage(contact.onion_address, content, this.replyTarget?.id || null);
+      const msg = await api.sendMessage(contact.onion_address, content, this.replyTarget?.id ?? "");
       const list = this.state.messages.get(contact.onion_address) || [];
       list.push(msg); this.state.messages.set(contact.onion_address, list);
       this.replyTarget = null;
@@ -596,7 +590,7 @@ class VchatApp {
 
   /* ── Modals ── */
 
-  private showModal(kind: string, data?: any): void {
+  private showModal(kind: string, _data?: any): void {
     const root = $("#modal-root")!;
     let html = "";
     let id = "";
@@ -734,7 +728,7 @@ class VchatApp {
     }
   }
 
-  private wireModal(modal: HTMLElement, kind: string): void {
+  private wireModal(modal: HTMLElement, _kind: string): void {
     modal.querySelector(".modal-close")?.addEventListener("click", () => this.closeModal());
     modal.addEventListener("click", (e) => { if (e.target === modal) this.closeModal(); });
   }
@@ -774,7 +768,7 @@ class VchatApp {
   }
 
   private wireSettings(modal: HTMLElement): void {
-    modal.querySelectorAll(".theme-opt").forEach(b => b.addEventListener("click", async () => {
+    modal.querySelectorAll(".theme-opt").forEach((b: HTMLElement) => b.addEventListener("click", async () => {
       const t = b.dataset.themeVal!;
       modal.querySelectorAll(".theme-opt").forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.theme = t;
@@ -782,7 +776,7 @@ class VchatApp {
       s.theme = t; this.state.settings = s;
       await api.updateSettings(s).catch(()=>{});
     }));
-    modal.querySelectorAll(".density-opt").forEach(b => b.addEventListener("click", async () => {
+    modal.querySelectorAll(".density-opt").forEach((b: HTMLElement) => b.addEventListener("click", async () => {
       const d = b.dataset.densityVal!;
       modal.querySelectorAll(".density-opt").forEach(x => x.classList.toggle("active", x === b));
       document.documentElement.dataset.density = d;
@@ -904,7 +898,7 @@ class VchatApp {
     });
   }
 
-  private async sendFile(file: File, asImage = false): Promise<void> {
+  private async sendFile(file: File, _asImage = false): Promise<void> {
     const c = this.state.currentContact;
     if (!c) return;
     try {

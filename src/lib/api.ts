@@ -127,7 +127,7 @@ export interface AppSettings {
 export const api = {
   // ── Identity ────────────────────────────────────────────────────────────
   initDb: (): Promise<void> =>
-    invoke("init_db", {}).catch(() => {}),
+    invoke("init_db", {}).then(() => {}).catch(() => {}),
 
   initIdentity: (displayName: string): Promise<Identity> =>
     invoke("init_identity", { displayName }),
@@ -322,4 +322,23 @@ export const api = {
 
   updateSettings: (settings: Partial<AppSettings>): Promise<AppSettings> =>
     invoke("update_settings", { settings }),
+
+  // ── Conference / SRTP ────────────────────────────────────────────────────
+  setMediaKey: (callId: string, sharedSecret: number[], ssrc: number): Promise<void> =>
+    invoke("set_media_key", { callId, sharedSecret, ssrc }),
+
+  createConference: (hostOnion: string): Promise<string> =>
+    invoke("create_conference", { hostOnion }),
+
+  joinConference: (conferenceId: string, peerOnion: string): Promise<void> =>
+    invoke("join_conference", { conferenceId, peerOnion }),
+
+  leaveConference: (conferenceId: string, peerOnion: string): Promise<void> =>
+    invoke("leave_conference", { conferenceId, peerOnion }),
+
+  getConference: (conferenceId: string): Promise<any> =>
+    invoke("get_conference", { conferenceId }),
+
+  forwardConferenceMedia: (conferenceId: string, fromPeer: string, frameId: number, data: number[]): Promise<void> =>
+    invoke("forward_conference_media", { conferenceId, fromPeer, frameId, data }),
 };
