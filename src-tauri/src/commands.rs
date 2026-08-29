@@ -984,7 +984,7 @@ pub async fn set_relay_config(
     username: Option<String>,
     password: Option<String>,
 ) -> Result<(), String> {
-    let store_fn = |k: &str, v: Option<String>| async move -> Result<(), String> {
+    let store_fn = |k: &str, v: Option<String>| async move {
         match v {
             Some(val) => {
                 store::set_setting(k, &val).await.map_err(|e| e.to_string())?;
@@ -993,7 +993,7 @@ pub async fn set_relay_config(
                 store::set_setting(k, "").await.map_err(|e| e.to_string())?;
             }
         }
-        Ok(())
+        Ok::<(), String>(())
     };
 
     store_fn("relay_stun", stun).await?;
