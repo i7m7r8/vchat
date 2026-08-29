@@ -154,8 +154,8 @@ jobs:
       - run: npm install
       - name: Prepare Android project (deterministic manifest + versioning)
         run: bash scripts/android-prepare.sh
-      - name: Build universal APK
-        run: npx tauri android build --target universal --apk
+      - name: Build universal APK (all ABIs)
+        run: npx tauri android build --target aarch64,armv7,x86_64,i686 --apk
       - name: Inspect build output
         run: ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ 2>/dev/null || ls -R src-tauri/gen/android/app/build/outputs/apk/ | head -40
       - name: Sign release APK (requires keystore secrets)
@@ -196,7 +196,7 @@ jobs:
       - name: Validate F-Droid metadata
         run: |
           docker run --rm --entrypoint bash -e LC_ALL=C.UTF-8 -v "$PWD":/tmp/work \
-            registry.gitlab.com/fdroid/fdroidserver:latest -lc '
+            registry.gitlab.com/fdroid/fdroidserver:buildserver -lc '
             set -e
             cd /tmp/work
             mkdir -p /tmp/buildfdroid && cd /tmp/buildfdroid
