@@ -180,7 +180,6 @@ impl SrtpContext {
         }
 
         let auth_len = self.profile.session_auth_len();
-        let payload_len = ciphertext.len() - header_len - auth_len;
 
         // Verify auth tag
         let expected_tag = compute_auth_tag(
@@ -319,7 +318,7 @@ fn build_ctr_keystream(
     ssrc: u32,
     roc: u32,
     seq: u16,
-    payload_len: usize,
+    _payload_len: usize,
     profile: SrtpProfile,
 ) -> CtrKeystream {
     // Build counter block: salt (14) || ssrc (4) || roc (4) || seq (2) || 0 (2)

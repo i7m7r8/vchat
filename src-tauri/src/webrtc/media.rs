@@ -127,7 +127,7 @@ pub struct MediaPipeline {
     pub tracks: TrackSessions,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct TrackSessions {
     pub voice: Option<TrackSession>,
     pub video: Option<TrackSession>,

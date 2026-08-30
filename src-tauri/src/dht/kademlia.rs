@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use tokio::sync::mpsc;
@@ -319,7 +319,7 @@ impl NodeInner {
             Message::Ping { request_id, id } => {
                 self.learn(Contact { id, addr: from });
                 self.transport
-                    .send(from, Message::Pong { request_id, id: self.current_id() })
+                    .send(from, &Message::Pong { request_id, id: self.current_id() })
                     .await?;
             }
             Message::Pong { id, .. } => {
@@ -339,7 +339,7 @@ impl NodeInner {
                 self.transport
                     .send(
                         from,
-                        Message::FoundNodes {
+                        &Message::FoundNodes {
                             request_id,
                             id: self.current_id(),
                             nodes,
@@ -350,7 +350,7 @@ impl NodeInner {
                     self.transport
                         .send(
                             from,
-                            Message::StoreValue {
+                            &Message::StoreValue {
                                 request_id,
                                 id: self.current_id(),
                                 key: target,
@@ -376,7 +376,7 @@ impl NodeInner {
                 self.transport
                     .send(
                         from,
-                        Message::StoreValue {
+                        &Message::StoreValue {
                             request_id,
                             id: self.current_id(),
                             key,
@@ -397,7 +397,7 @@ impl NodeInner {
         let rid = msg_request_id(&msg);
         let (tx, mut rx) = mpsc::channel(16);
         self.pending.lock().unwrap().insert(rid, tx);
-        if self.transport.send(addr, msg).await.is_err() {
+        if self.transport.send(addr, &msg).await.is_err() {
             self.pending.lock().unwrap().remove(&rid);
             return Vec::new();
         }

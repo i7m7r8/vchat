@@ -168,7 +168,7 @@ impl DhtClient {
         Ok(vec![])
     }
 
-    pub async fn send_message(&self, peer_identity: &str, msg_type: &str, payload: &[u8]) -> Result<()> {
+    pub async fn send_message(&self, peer_identity: &str, _msg_type: &str, payload: &[u8]) -> Result<()> {
         let key = NodeId::from_sha256(format!("{}:msg", peer_identity).as_bytes());
         let value = StoredValue::new(key, payload.to_vec(), &self.signing_key);
 
