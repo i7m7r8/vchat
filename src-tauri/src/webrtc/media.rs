@@ -71,7 +71,6 @@ impl FrameHeader {
 pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024;
 
 /// A single track's encoder/session keying inside a pipeline.
-#[derive(Debug)]
 pub struct TrackSession {
     pub ssrc: u32,
     pub srtp: SrtpContext,

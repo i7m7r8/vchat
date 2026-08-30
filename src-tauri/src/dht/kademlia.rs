@@ -19,6 +19,7 @@ use sha2::Digest;
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
+use async_trait::async_trait;
 use crate::crypto::keys::Ed25519KeyPair;
 
 /// ID space width in bits.
@@ -164,6 +165,7 @@ fn msg_request_id(msg: &Message) -> u64 {
 }
 
 /// Datagram transport abstraction (UDP in practice).
+#[async_trait]
 pub trait Transport: Send + Sync {
     fn local_addr(&self) -> SocketAddr;
     async fn send(&self, to: SocketAddr, msg: &Message) -> Result<()>;
@@ -184,6 +186,7 @@ impl UdpTransport {
     }
 }
 
+#[async_trait]
 impl Transport for UdpTransport {
     fn local_addr(&self) -> SocketAddr {
         self.socket.local_addr().unwrap_or_else(|_| "0.0.0.0:0".parse().unwrap())
@@ -504,6 +507,11 @@ impl Node {
 
     pub fn local_addr(&self) -> SocketAddr {
         self.inner.transport.local_addr()
+    }
+
+    /// All contacts currently in the routing table (for persistence).
+    pub fn contacts(&self) -> Vec<Contact> {
+        self.inner.table.lock().unwrap().buckets.iter().flatten().cloned().collect()
     }
 
     /// Re-key the node to a stable identity id and forget stale routing state.

@@ -1,7 +1,10 @@
 pub mod keys;
-pub mod noise;
-pub mod pqc;
 pub mod store;
+
+#[cfg(feature = "jami-p2p")]
+pub mod noise;
+#[cfg(feature = "jami-p2p")]
+pub mod pqc;
 
 use aes_gcm::{
     aead::{Aead, KeyInit},

@@ -320,8 +320,6 @@ fn build_ctr_keystream(
     payload_len: usize,
     profile: SrtpProfile,
 ) -> CtrKeystream {
-    let key_len = profile.session_key_len();
-
     // Build counter block: salt (14) || ssrc (4) || roc (4) || seq (2) || 0 (2)
     let mut counter = [0u8; 16];
     counter[..14].copy_from_slice(salt);
@@ -333,24 +331,39 @@ fn build_ctr_keystream(
     let cipher = match profile {
         SrtpProfile::Aes128CtrHmacSha1_80 => {
             let key: &[u8; 16] = enc_key[..16].try_into().unwrap();
-            aes::Aes128Ctr::new(key.into(), (&counter).into())
+            CtrCipher::Aes128(aes::Aes128Ctr::new(
+                aes::cipher::Key::<aes::Aes128Ctr>::from_slice(key),
+                aes::cipher::Iv::<aes::Aes128Ctr>::from_slice(&counter),
+            ))
         }
         SrtpProfile::Aes256CtrHmacSha1_80 => {
             let key: &[u8; 32] = enc_key[..32].try_into().unwrap();
-            aes::Aes256Ctr::new(key.into(), (&counter).into())
+            CtrCipher::Aes256(aes::Aes256Ctr::new(
+                aes::cipher::Key::<aes::Aes256Ctr>::from_slice(key),
+                aes::cipher::Iv::<aes::Aes256Ctr>::from_slice(&counter),
+            ))
         }
     };
 
     CtrKeystream { cipher }
 }
 
+enum CtrCipher {
+    Aes128(aes::Aes128Ctr),
+    Aes256(aes::Aes256Ctr),
+}
+
 struct CtrKeystream {
-    cipher: aes::cipher::StreamCipherCore,
+    cipher: CtrCipher,
 }
 
 impl CtrKeystream {
     fn apply_keystream(&mut self, data: &mut [u8]) {
-        self.cipher.apply_keystream(data);
+        use aes::cipher::StreamCipher;
+        match &mut self.cipher {
+            CtrCipher::Aes128(c) => c.apply_keystream(data),
+            CtrCipher::Aes256(c) => c.apply_keystream(data),
+        }
     }
 }
 

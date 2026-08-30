@@ -1,13 +1,13 @@
 pub mod kademlia;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::dht::kademlia::{Node, NodeId, StoredValue, Transport, UdpTransport};
 use crate::crypto::keys::Ed25519KeyPair;
@@ -40,11 +40,10 @@ bootstrap_nodes: Vec<SocketAddr>,
 
 impl DhtClient {
     pub async fn new(bootstrap_nodes: Vec<SocketAddr>, signing_key: Ed25519KeyPair) -> Result<Self> {
-        let socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
-        let transport: Arc<dyn Transport> = Arc::new(UdpTransport { socket: Arc::new(socket) });
+        let transport: Arc<dyn Transport> = Arc::new(UdpTransport::new().await?);
 
         let node = Node::new(
-            NodeId::random(),
+            NodeId::from_pubkey(&signing_key.public_key_bytes()),
             transport,
             bootstrap_nodes.clone(),
         );
@@ -94,7 +93,7 @@ impl DhtClient {
 
     /// Save current routing table contacts to cache for next restart
     pub async fn save_peer_cache(&self, cache_path: &std::path::Path) -> Result<()> {
-        let contacts = self.node.inner.table.lock().unwrap().buckets.iter().flatten().map(|c| c.addr).collect::<Vec<_>>();
+        let contacts = self.node.contacts().iter().map(|c| c.addr).collect::<Vec<_>>();
         tokio::fs::write(cache_path, serde_json::to_vec(&contacts)?).await?;
         Ok(())
     }

@@ -34,6 +34,11 @@ zeroize = { version = "1", features = ["derive"] }
 base64 = "0.22"
 hex = "0.4"
 
+# ── SRTP media security (RFC 3711): AES-CTR + HMAC-SHA1 ─────────────────────
+aes = { version = "0.8", features = ["ctr"] }
+hmac = "0.12"
+sha1 = "0.10"
+
 # ── Post-Quantum Cryptography (NIST PQC, hybrid, optional) ─────────────────
 pqc_kyber = { version = "0.7", optional = true, features = ["kyber768"] }
 pqc_dilithium = { version = "0.2", optional = true, features = ["mode3"] }

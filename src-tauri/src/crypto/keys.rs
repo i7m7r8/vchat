@@ -2,6 +2,7 @@ use anyhow::Result;
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use zeroize::Zeroize;
 
+#[derive(Clone)]
 pub struct Ed25519KeyPair {
     signing_key_bytes: [u8; 32],
     pub verifying_key: VerifyingKey,

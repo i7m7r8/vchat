@@ -456,18 +456,8 @@ pub async fn init_media_session(
 
     let local_candidates = ice::gather_candidates(&socket, &relay).await;
 
-    let session = MediaSession {
-        socket: socket.clone(),
-        local,
-        local_candidates: local_candidates.clone(),
-        remote_candidates: Vec::new(),
-        remote: None,
-        connected: false,
-    };
-    s.media_sessions.insert(call_id.to_string(), session);
-    drop(s);
-
-    // Initialize SRTP contexts when the session connects (will be set via set_media_key)
+    // Build the session with SRTP contexts (populated via set_media_key once the
+    // X3DH ratchet derives a shared key for the call).
     let session = MediaSession {
         socket: socket.clone(),
         local,

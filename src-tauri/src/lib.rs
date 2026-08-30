@@ -1,18 +1,25 @@
 pub mod base32;
 pub mod commands;
 pub mod crypto;
-pub mod drt;
 pub mod error;
-pub mod file_transfer;
-pub mod identity;
 pub mod messaging;
 pub mod tor;
 pub mod webrtc;
 
 // Jami-style P2P modules - now all pure-Rust, no native dependencies.
-// `dht` (Kademlia), `swarm` (Git-like conversations), and `webrtc` (ICE+SRTP)
-// all compile in the default build.
+// `dht` (Kademlia) and `webrtc` (ICE+SRTP) compile in the default build.
 pub mod dht;
+
+// Optional Jami-style subsystems gated behind the heavy `jami-p2p` feature.
+// These are not referenced by the live message/call path and use opt-in
+// native/experimental crates, so they must not block the default build.
+#[cfg(feature = "jami-p2p")]
+pub mod drt;
+#[cfg(feature = "jami-p2p")]
+pub mod file_transfer;
+#[cfg(feature = "jami-p2p")]
+pub mod identity;
+#[cfg(feature = "jami-p2p")]
 pub mod swarm;
 
 use tracing_subscriber::EnvFilter;
