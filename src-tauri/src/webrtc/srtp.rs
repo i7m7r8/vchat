@@ -8,6 +8,8 @@ use sha1::Sha1;
 use sha2::Digest;
 use zeroize::Zeroize;
 
+type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
+type Aes256Ctr = ctr::Ctr128BE<aes::Aes256>;
 type HmacSha1 = Hmac<Sha1>;
 
 const SRTP_MASTER_KEY_LEN: usize = 16;
@@ -331,16 +333,16 @@ fn build_ctr_keystream(
     let cipher = match profile {
         SrtpProfile::Aes128CtrHmacSha1_80 => {
             let key: &[u8; 16] = enc_key[..16].try_into().unwrap();
-            CtrCipher::Aes128(aes::Aes128Ctr::new(
-                aes::cipher::Key::<aes::Aes128Ctr>::from_slice(key),
-                aes::cipher::Iv::<aes::Aes128Ctr>::from_slice(&counter),
+            CtrCipher::Aes128(Aes128Ctr::new(
+                aes::cipher::Key::<Aes128Ctr>::from_slice(key),
+                aes::cipher::Iv::<Aes128Ctr>::from_slice(&counter),
             ))
         }
         SrtpProfile::Aes256CtrHmacSha1_80 => {
             let key: &[u8; 32] = enc_key[..32].try_into().unwrap();
-            CtrCipher::Aes256(aes::Aes256Ctr::new(
-                aes::cipher::Key::<aes::Aes256Ctr>::from_slice(key),
-                aes::cipher::Iv::<aes::Aes256Ctr>::from_slice(&counter),
+            CtrCipher::Aes256(Aes256Ctr::new(
+                aes::cipher::Key::<Aes256Ctr>::from_slice(key),
+                aes::cipher::Iv::<Aes256Ctr>::from_slice(&counter),
             ))
         }
     };
@@ -349,8 +351,8 @@ fn build_ctr_keystream(
 }
 
 enum CtrCipher {
-    Aes128(aes::Aes128Ctr),
-    Aes256(aes::Aes256Ctr),
+    Aes128(Aes128Ctr),
+    Aes256(Aes256Ctr),
 }
 
 struct CtrKeystream {
@@ -359,7 +361,6 @@ struct CtrKeystream {
 
 impl CtrKeystream {
     fn apply_keystream(&mut self, data: &mut [u8]) {
-        use aes::cipher::StreamCipher;
         match &mut self.cipher {
             CtrCipher::Aes128(c) => c.apply_keystream(data),
             CtrCipher::Aes256(c) => c.apply_keystream(data),

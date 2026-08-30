@@ -35,7 +35,8 @@ base64 = "0.22"
 hex = "0.4"
 
 # ── SRTP media security (RFC 3711): AES-CTR + HMAC-SHA1 ─────────────────────
-aes = { version = "0.8", features = ["ctr"] }
+aes = "0.8"
+ctr = "0.9"
 hmac = "0.12"
 sha1 = "0.10"
 
