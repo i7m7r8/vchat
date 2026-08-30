@@ -201,12 +201,14 @@ pub use webrtc::CallSession;
 
 pub struct VchatState {
     pub webrtc: webrtc::SharedWebRTCState,
+    pub dht: Arc<tokio::sync::RwLock<Option<crate::dht::DhtClient>>>,
 }
 
 impl VchatState {
     pub fn new() -> Self {
         Self {
             webrtc: webrtc::create_state(),
+            dht: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 }
@@ -1569,6 +1571,70 @@ pub async fn forward_conference_media(
 ) -> Result<(), String> {
     let mgr = webrtc::conference::ConferenceManager::new(state.webrtc.clone());
     mgr.forward_media(&conference_id, &from_peer, frame_id, &data)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DHT peer discovery commands
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async fn get_or_init_dht(state: &SharedVchatState) -> Result<crate::dht::DhtClient, String> {
+    let mut guard = state.dht.write().await;
+    if let Some(dht) = guard.as_ref() {
+        return Ok(dht.clone());
+    }
+    let key = crypto::load_signing_key()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Identity not initialized".to_string())?;
+    let onion = get_identity_onion().await?;
+
+    let dht = crate::dht::DhtClient::new(vec![], key)
+        .await
+        .map_err(|e| e.to_string())?;
+    dht.init_identity(onion.clone()).await;
+    dht.set_onion(onion).await;
+    dht.start();
+    *guard = Some(dht.clone());
+    Ok(dht)
+}
+
+/// Initialize the truly-serverless DHT and publish this node's presence (onion).
+#[tauri::command]
+pub async fn dht_start(
+    state: State<'_, SharedVchatState>,
+) -> Result<String, String> {
+    let dht = get_or_init_dht(&state).await?;
+    dht.publish_presence_now()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(dht.local_addr().to_string())
+}
+
+/// Bootstrap the DHT routing table from a manually-entered peer (LAN / QR).
+#[tauri::command]
+pub async fn dht_bootstrap_from_peer(
+    state: State<'_, SharedVchatState>,
+    addr: String,
+) -> Result<(), String> {
+    let peer = addr
+        .parse::<std::net::SocketAddr>()
+        .map_err(|e| format!("Invalid socket address {addr}: {e}"))?;
+    let dht = get_or_init_dht(&state).await?;
+    dht.bootstrap_from_peer(peer)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Backup local routing-table contacts to the peer cache on disk.
+#[tauri::command]
+pub async fn dht_save_peer_cache(
+    state: State<'_, SharedVchatState>,
+) -> Result<(), String> {
+    let dht = get_or_init_dht(&state).await?;
+    let cache = "dht_peer_cache.json";
+    dht.save_peer_cache(std::path::Path::new(cache))
         .await
         .map_err(|e| e.to_string())
 }

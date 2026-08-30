@@ -15,6 +15,7 @@ use crate::crypto::keys::Ed25519KeyPair;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub identity: String,
+    pub onion_address: Option<String>,
     pub addresses: Vec<SocketAddr>,
     pub ice_candidates: Vec<IceCandidate>,
     pub last_seen: i64,
@@ -30,13 +31,15 @@ pub struct IceCandidate {
     pub protocol: String, // "udp", "tcp"
 }
 
+#[derive(Clone)]
 pub struct DhtClient {
     node: Arc<Node>,
     identity: Arc<RwLock<Option<String>>>,
+    onion: Arc<RwLock<Option<String>>>,
     signing_key: Ed25519KeyPair,
     peers: Arc<RwLock<HashMap<String, PeerInfo>>>,
-bootstrap_nodes: Vec<SocketAddr>,
-    }
+    bootstrap_nodes: Vec<SocketAddr>,
+}
 
 impl DhtClient {
     pub async fn new(bootstrap_nodes: Vec<SocketAddr>, signing_key: Ed25519KeyPair) -> Result<Self> {
@@ -64,6 +67,7 @@ impl DhtClient {
         Ok(Self {
             node: Arc::new(node),
             identity: Arc::new(RwLock::new(None)),
+            onion: Arc::new(RwLock::new(None)),
             signing_key,
             peers: Arc::new(RwLock::new(HashMap::new())),
             bootstrap_nodes,
@@ -72,6 +76,58 @@ impl DhtClient {
 
     pub async fn new_truly_serverless(signing_key: Ed25519KeyPair) -> Result<Self> {
         Self::new(vec![], signing_key).await
+    }
+
+    /// Start the DHT listener loop and the periodic presence publisher.
+    pub fn start(&self) {
+        let runner = self.node.clone();
+        tokio::spawn(async move {
+            runner.run().await;
+        });
+        self.start_presence_publisher();
+    }
+
+    /// Record this node's own Tor onion address so it can be published to the
+    /// routing table and discovered by peers in the mesh.
+    pub async fn set_onion(&self, onion: String) {
+        *self.onion.write().await = Some(onion);
+    }
+
+    /// Set this node's identity (onion address) used as the presence key, and
+    /// re-key the routing table to the derived node id.
+    pub async fn init_identity(&self, identity_onion: String) {
+        *self.identity.write().await = Some(identity_onion.clone());
+        let node_id = NodeId::from_sha256(identity_onion.as_bytes());
+        self.node.set_id(node_id);
+    }
+
+    /// Local UDP socket address of this DHT node.
+    pub fn local_addr(&self) -> SocketAddr {
+        self.node.local_addr()
+    }
+
+    /// Publish this node's presence immediately (used right after startup).
+    pub async fn publish_presence_now(&self) -> Result<()> {
+        if let Some(id) = self.identity.read().await.as_ref() {
+            let onion = self.onion.read().await.clone();
+            self.node.put(
+                &NodeId::from_sha256(format!("{}:presence", id).as_bytes()),
+                StoredValue::new(
+                    NodeId::from_sha256(format!("{}:presence", id).as_bytes()),
+                    serde_json::to_vec(&PeerInfo {
+                        identity: id.clone(),
+                        onion_address: onion,
+                        addresses: vec![self.node.local_addr()],
+                        ice_candidates: vec![],
+                        last_seen: chrono::Utc::now().timestamp(),
+                        version: env!("CARGO_PKG_VERSION").to_string(),
+                    })?,
+                    &self.signing_key,
+                ),
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     /// Bootstrap from a known peer's IP:port (e.g., from QR code or manual entry)
@@ -98,9 +154,10 @@ impl DhtClient {
         Ok(())
     }
 
-    async fn start_presence_publisher(&self) {
+    fn start_presence_publisher(&self) {
         let node = self.node.clone();
         let identity = self.identity.clone();
+        let onion = self.onion.clone();
         let signing_key = self.signing_key.clone();
 
         tokio::spawn(async move {
@@ -108,7 +165,10 @@ impl DhtClient {
             loop {
                 interval.tick().await;
                 if let Some(id) = identity.read().await.as_ref() {
-                    if let Err(e) = Self::publish_presence(&node, &signing_key, id).await {
+                    let onion_addr = onion.read().await.clone();
+                    if let Err(e) =
+                        Self::publish_presence(&node, &signing_key, id, onion_addr, node.local_addr()).await
+                    {
                         warn!("Failed to publish presence: {}", e);
                     }
                 }
@@ -116,11 +176,18 @@ impl DhtClient {
         });
     }
 
-    async fn publish_presence(node: &Arc<Node>, signing_key: &Ed25519KeyPair, identity: &str) -> Result<()> {
+    async fn publish_presence(
+        node: &Arc<Node>,
+        signing_key: &Ed25519KeyPair,
+        identity: &str,
+        onion_address: Option<String>,
+        local: SocketAddr,
+    ) -> Result<()> {
         let key = NodeId::from_sha256(format!("{}:presence", identity).as_bytes());
         let info = PeerInfo {
             identity: identity.to_string(),
-            addresses: vec![],
+            onion_address,
+            addresses: vec![local],
             ice_candidates: vec![],
             last_seen: chrono::Utc::now().timestamp(),
             version: env!("CARGO_PKG_VERSION").to_string(),

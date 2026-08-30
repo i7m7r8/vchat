@@ -111,6 +111,9 @@ pub fn run() {
             commands::leave_conference,
             commands::get_conference,
             commands::forward_conference_media,
+            commands::dht_start,
+            commands::dht_bootstrap_from_peer,
+            commands::dht_save_peer_cache,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
