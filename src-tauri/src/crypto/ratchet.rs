@@ -248,8 +248,6 @@ impl DoubleRatchet {
             .decrypt(Nonce::from_slice(&msg.nonce), msg.ciphertext.as_slice())
             .map_err(|_| anyhow!("ratchet decrypt failed"))
     }
-
-    }
 }
 
 /// Serializable snapshot of the entire ratchet state for persistence.
