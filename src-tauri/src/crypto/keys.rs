@@ -62,6 +62,7 @@ impl Ed25519KeyPair {
     }
 }
 
+#[derive(Clone)]
 pub struct X25519KeyPair {
     secret: x25519_dalek::StaticSecret,
     pub public: x25519_dalek::PublicKey,

@@ -1,4 +1,6 @@
 pub mod keys;
+pub mod ratchet;
+pub mod session;
 pub mod store;
 
 #[cfg(feature = "jami-p2p")]
