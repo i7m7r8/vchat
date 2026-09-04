@@ -249,20 +249,24 @@ impl DoubleRatchet {
             .map_err(|_| anyhow!("ratchet decrypt failed"))
     }
 
-    /// Serializable snapshot of the entire ratchet state for persistence.
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    pub struct RatchetState {
-        pub root_key: Key,
-        pub send_ck: Option<Key>,
-        pub recv_ck: Key,
-        pub our_dh_secret: [u8; 32],
-        pub our_dh_public: [u8; 32],
-        pub their_dh_pub: [u8; 32],
-        pub ad: Vec<u8>,
-        pub n: u32,
-        pub pn: u32,
     }
+}
 
+/// Serializable snapshot of the entire ratchet state for persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RatchetState {
+    pub root_key: Key,
+    pub send_ck: Option<Key>,
+    pub recv_ck: Key,
+    pub our_dh_secret: [u8; 32],
+    pub our_dh_public: [u8; 32],
+    pub their_dh_pub: [u8; 32],
+    pub ad: Vec<u8>,
+    pub n: u32,
+    pub pn: u32,
+}
+
+impl DoubleRatchet {
     /// Snapshot the ratchet state for persistence.
     pub fn snapshot(&self) -> RatchetState {
         RatchetState {
