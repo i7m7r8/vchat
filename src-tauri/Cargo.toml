@@ -108,7 +108,7 @@ jni = { version = "0.21", features = ["invocation"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros", "fs"] }
 
 [features]
-default = ["custom-protocol", "pqc-hybrid"]
+default = ["custom-protocol", "pqc-hybrid", "jami-p2p"]
 custom-protocol = ["tauri/custom-protocol"]
 
 # Post-Quantum Cryptography Features
@@ -117,8 +117,8 @@ pqc-dilithium = ["dep:pqc_dilithium"]
 pqc-sphincs = ["dep:pqc_sphincsplus"]
 pqc-hybrid = ["pqc-kyber", "pqc-dilithium"]
 
-# Jami-style P2P (heavy native dependencies, opt-in)
-jami-p2p = ["dep:opendht", "dep:rcgen", "dep:srtp", "dep:opus", "dep:git2", "dep:tokio-rustls"]
+# Jami-style P2P - pure-Rust implementations (no C++ OpenDHT needed)
+jami-p2p = ["dep:rcgen", "dep:opus", "dep:git2", "dep:tokio-rustls"]
 
 [profile.release]
 strip = true
