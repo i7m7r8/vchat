@@ -6,13 +6,10 @@ pub mod messaging;
 pub mod tor;
 pub mod webrtc;
 
-// Jami-style P2P modules - now all pure-Rust, no native dependencies.
-// `dht` (Kademlia) and `webrtc` (ICE+SRTP) compile in the default build.
+// Core P2P modules (pure-Rust, no native deps)
 pub mod dht;
 
-// Optional Jami-style subsystems gated behind the heavy `jami-p2p` feature.
-// These are not referenced by the live message/call path and use opt-in
-// native/experimental crates, so they must not block the default build.
+// Optional heavy subsystems - off by default
 #[cfg(feature = "jami-p2p")]
 pub mod drt;
 #[cfg(feature = "jami-p2p")]
